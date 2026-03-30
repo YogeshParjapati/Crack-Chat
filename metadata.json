@@ -1,5 +1,5 @@
 {
   "name": "CrackChat",
-  "description": "A simple, anonymous real-time chat platform where you can talk with friends without restrictions or login.",
+  "description": "A secure real-time chat platform with Google authentication. Features include GIF search, emoji support, and room-based chat with optional passwords.",
   "requestFramePermissions": []
 }

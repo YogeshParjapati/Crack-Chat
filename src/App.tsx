@@ -15,7 +15,9 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { 
-  signInAnonymously, 
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
   onAuthStateChanged, 
   User as FirebaseUser 
 } from 'firebase/auth';
@@ -77,7 +79,6 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
 }
 
 // ... (skipping some lines)
@@ -137,11 +138,7 @@ function ChatApp() {
   // Initialize Auth
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
-      if (u) {
-        setUser(u);
-      } else {
-        signInAnonymously(auth).catch(e => console.error("Auth failed", e));
-      }
+      setUser(u);
       setIsAuthReady(true);
     });
 
@@ -160,9 +157,29 @@ function ChatApp() {
     return () => unsubscribe();
   }, []);
 
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      console.error("Auth failed", err);
+      setError("Failed to sign in with Google");
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setIsJoined(false);
+      setCurrentRoom(null);
+    } catch (err) {
+      console.error("Sign out failed", err);
+    }
+  };
+
   // Fetch Rooms
   useEffect(() => {
-    if (!isAuthReady) return;
+    if (!isAuthReady || !user) return;
 
     const q = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -174,11 +191,11 @@ function ChatApp() {
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'rooms'));
 
     return () => unsubscribe();
-  }, [isAuthReady]);
+  }, [isAuthReady, user]);
 
   // Fetch Messages for current room
   useEffect(() => {
-    if (!isAuthReady || !currentRoom) return;
+    if (!isAuthReady || !user || !currentRoom) return;
 
     const q = query(
       collection(db, 'rooms', currentRoom.id, 'messages'), 
@@ -195,7 +212,7 @@ function ChatApp() {
     }, (err) => handleFirestoreError(err, OperationType.LIST, `rooms/${currentRoom.id}/messages`));
 
     return () => unsubscribe();
-  }, [isAuthReady, currentRoom]);
+  }, [isAuthReady, user, currentRoom]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -298,6 +315,49 @@ function ChatApp() {
       searchGifs(true);
     }
   }, [showGifPicker, isStickerMode]);
+
+  if (!user) {
+    return (
+      <div className={cn("min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-4 font-sans transition-all duration-700 relative overflow-hidden", currentTheme.class)}>
+        {currentTheme.bgImage && (
+          <div 
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
+            style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.4 }}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/60 pointer-events-none" />
+        
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full space-y-8 relative z-10 text-center"
+        >
+          <div className="space-y-2">
+            <h1 className="text-7xl font-black tracking-tighter uppercase italic text-[var(--crack-orange)]">
+              CRACK<span className="text-white">CHAT</span>
+            </h1>
+            <p className="text-zinc-500 text-sm uppercase tracking-widest font-mono">
+              Authentication Required
+            </p>
+          </div>
+
+          <div className="bg-zinc-900/30 p-8 border border-zinc-800 space-y-6">
+            <p className="text-zinc-400 text-sm font-mono uppercase">
+              To enter the void, you must verify your identity.
+            </p>
+            <button 
+              onClick={handleGoogleSignIn}
+              className="w-full bg-white text-black font-black py-4 uppercase italic flex items-center justify-center space-x-3 hover:scale-105 transition-transform"
+            >
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+              <span>Sign In with Google</span>
+            </button>
+            {error && <p className="text-red-500 text-[10px] uppercase font-bold">{error}</p>}
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (!isJoined) {
     return (
@@ -451,9 +511,14 @@ function ChatApp() {
           <h2 className="text-2xl font-black tracking-tighter uppercase italic text-[var(--crack-orange)]">
             CRACK<span className="text-white">CHAT</span>
           </h2>
-          <button onClick={() => setShowThemePicker(!showThemePicker)} className="text-zinc-500 hover:text-[var(--crack-orange)]">
-            <Palette className="w-4 h-4" />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button onClick={() => setShowThemePicker(!showThemePicker)} className="text-zinc-500 hover:text-[var(--crack-orange)]">
+              <Palette className="w-4 h-4" />
+            </button>
+            <button onClick={handleSignOut} className="text-zinc-500 hover:text-red-500">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         
         <div className="space-y-4 flex-1 overflow-y-auto">
