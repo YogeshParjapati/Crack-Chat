@@ -1,27 +1,5 @@
-import React, { useState, useEffect, useRef, ErrorInfo, ReactNode, Component } from 'react';
-import { 
-  collection, 
-  addDoc, 
-  onSnapshot, 
-  query, 
-  orderBy, 
-  limit, 
-  serverTimestamp, 
-  doc, 
-  setDoc, 
-  getDoc,
-  getDocs,
-  getDocFromServer,
-  Timestamp
-} from 'firebase/firestore';
-import { 
-  signInWithPopup,
-  GoogleAuthProvider,
-  signOut,
-  onAuthStateChanged, 
-  User as FirebaseUser 
-} from 'firebase/auth';
-import { auth, db } from './firebase';
+import React, { useState, useEffect, useRef } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { Send, User, Hash, Shield, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
@@ -31,7 +9,7 @@ interface Message {
   id: string;
   text: string;
   sender: string;
-  timestamp: any;
+  timestamp: number;
   color: string;
   type: 'text' | 'emoji' | 'gif' | 'sticker';
   url?: string;
@@ -44,44 +22,6 @@ interface Room {
   hasPassword?: boolean;
   password?: string;
 }
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-}
-
-// ... (skipping some lines)
 
 const COLORS = [
   'text-red-400', 'text-blue-400', 'text-green-400', 
@@ -101,6 +41,13 @@ const THEMES = [
   { name: 'Forest Shrine', class: 'theme-anime', color: '#4ade80', bgImage: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&q=80&w=1920' },
 ];
 
+const INITIAL_ROOMS: Room[] = [
+  { id: 'global', name: 'The Void' },
+  { id: 'anime', name: 'Anime Lounge' },
+  { id: 'gaming', name: 'Gaming Zone' },
+  { id: 'dev', name: 'Dev Den' }
+];
+
 export default function App() {
   return (
     <ChatApp />
@@ -108,15 +55,14 @@ export default function App() {
 }
 
 function ChatApp() {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [username, setUsername] = useState(localStorage.getItem('crackchat_username') || '');
-  const [userColor, setUserColor] = useState(localStorage.getItem('crackchat_color') || '');
+  const [userColor, setUserColor] = useState(localStorage.getItem('crackchat_color') || COLORS[Math.floor(Math.random() * COLORS.length)]);
   const [isJoined, setIsJoined] = useState(false);
-  const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [currentRoom, setCurrentRoom] = useState<Room>(INITIAL_ROOMS[0]);
+  const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
   const [showRoomCreate, setShowRoomCreate] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomPass, setNewRoomPass] = useState('');
@@ -135,84 +81,29 @@ function ChatApp() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize Auth
+  // Initialize Socket
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setIsAuthReady(true);
+    const newSocket = io();
+    setSocket(newSocket);
+
+    newSocket.on("room-messages", (msgs: Message[]) => {
+      setMessages(msgs);
     });
 
-    // Test connection
-    const testConnection = async () => {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration.");
-        }
-      }
-    };
-    testConnection();
+    newSocket.on("new-message", (msg: Message) => {
+      setMessages(prev => [...prev, msg]);
+    });
 
-    return () => unsubscribe();
+    return () => {
+      newSocket.disconnect();
+    };
   }, []);
 
-  const handleGoogleSignIn = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (err) {
-      console.error("Auth failed", err);
-      setError("Failed to sign in with Google");
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-      setIsJoined(false);
-      setCurrentRoom(null);
-    } catch (err) {
-      console.error("Sign out failed", err);
-    }
-  };
-
-  // Fetch Rooms
   useEffect(() => {
-    if (!isAuthReady || !user) return;
-
-    const q = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const roomList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Room[];
-      setRooms(roomList);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'rooms'));
-
-    return () => unsubscribe();
-  }, [isAuthReady, user]);
-
-  // Fetch Messages for current room
-  useEffect(() => {
-    if (!isAuthReady || !user || !currentRoom) return;
-
-    const q = query(
-      collection(db, 'rooms', currentRoom.id, 'messages'), 
-      orderBy('timestamp', 'asc'),
-      limit(100)
-    );
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Message[];
-      setMessages(msgs);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, `rooms/${currentRoom.id}/messages`));
-
-    return () => unsubscribe();
-  }, [isAuthReady, user, currentRoom]);
+    if (socket && isJoined && currentRoom) {
+      socket.emit("join-room", currentRoom.id);
+    }
+  }, [socket, isJoined, currentRoom]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -238,58 +129,43 @@ function ChatApp() {
     localStorage.setItem('crackchat_color', userColor);
   };
 
-  const handleCreateRoom = async (e: React.FormEvent) => {
+  const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newRoomName.trim() && user) {
-      try {
-        const roomId = newRoomName.toLowerCase().replace(/\s+/g, '-');
-        const roomRef = doc(db, 'rooms', roomId);
-        
-        // Check if exists
-        const snap = await getDoc(roomRef);
-        if (snap.exists()) {
-          setError('Room ID already exists');
-          return;
-        }
-
-        await setDoc(roomRef, {
-          name: newRoomName,
-          password: newRoomPass || null,
-          createdAt: serverTimestamp(),
-          createdBy: user.uid
-        });
-
-        setNewRoomName('');
-        setNewRoomPass('');
-        setShowRoomCreate(false);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'rooms');
-      }
+    if (newRoomName.trim()) {
+      const roomId = newRoomName.toLowerCase().replace(/\s+/g, '-');
+      const newRoom: Room = {
+        id: roomId,
+        name: newRoomName,
+        hasPassword: !!newRoomPass,
+        password: newRoomPass || undefined
+      };
+      
+      setRooms(prev => [...prev, newRoom]);
+      setNewRoomName('');
+      setNewRoomPass('');
+      setShowRoomCreate(false);
     }
   };
 
-  const handleSendMessage = async (e?: React.FormEvent, customData?: Partial<Message>) => {
+  const handleSendMessage = (e?: React.FormEvent, customData?: Partial<Message>) => {
     e?.preventDefault();
-    if ((inputText.trim() || customData) && user && isJoined && currentRoom) {
-      try {
-        const messageData = {
-          text: customData?.text || inputText,
-          sender: username,
-          color: userColor,
-          type: customData?.type || 'text',
-          url: customData?.url || null,
-          timestamp: serverTimestamp(),
-          uid: user.uid
-        };
+    if ((inputText.trim() || customData) && socket && isJoined && currentRoom) {
+      const messageData: Message = {
+        id: Math.random().toString(36).substr(2, 9),
+        text: customData?.text || inputText,
+        sender: username,
+        color: userColor,
+        type: customData?.type || 'text',
+        url: customData?.url || undefined,
+        timestamp: Date.now(),
+        uid: socket.id || 'anonymous'
+      };
 
-        await addDoc(collection(db, 'rooms', currentRoom.id, 'messages'), messageData);
-        
-        setInputText('');
-        setShowEmojiPicker(false);
-        setShowGifPicker(false);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `rooms/${currentRoom.id}/messages`);
-      }
+      socket.emit("send-message", { roomId: currentRoom.id, message: messageData });
+      
+      setInputText('');
+      setShowEmojiPicker(false);
+      setShowGifPicker(false);
     }
   };
 
@@ -315,49 +191,6 @@ function ChatApp() {
       searchGifs(true);
     }
   }, [showGifPicker, isStickerMode]);
-
-  if (!user) {
-    return (
-      <div className={cn("min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-4 font-sans transition-all duration-700 relative overflow-hidden", currentTheme.class)}>
-        {currentTheme.bgImage && (
-          <div 
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
-            style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.4 }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/60 pointer-events-none" />
-        
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full space-y-8 relative z-10 text-center"
-        >
-          <div className="space-y-2">
-            <h1 className="text-7xl font-black tracking-tighter uppercase italic text-[var(--crack-orange)]">
-              CRACK<span className="text-white">CHAT</span>
-            </h1>
-            <p className="text-zinc-500 text-sm uppercase tracking-widest font-mono">
-              Authentication Required
-            </p>
-          </div>
-
-          <div className="bg-zinc-900/30 p-8 border border-zinc-800 space-y-6">
-            <p className="text-zinc-400 text-sm font-mono uppercase">
-              To enter the void, you must verify your identity.
-            </p>
-            <button 
-              onClick={handleGoogleSignIn}
-              className="w-full bg-white text-black font-black py-4 uppercase italic flex items-center justify-center space-x-3 hover:scale-105 transition-transform"
-            >
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
-              <span>Sign In with Google</span>
-            </button>
-            {error && <p className="text-red-500 text-[10px] uppercase font-bold">{error}</p>}
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
 
   if (!isJoined) {
     return (
@@ -394,10 +227,7 @@ function ChatApp() {
                   type="text"
                   placeholder="CODENAME"
                   value={username}
-                  onChange={(e) => {
-                    setUsername(e.target.value);
-                    if (!userColor) setUserColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
-                  }}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="w-full bg-zinc-900 border border-zinc-800 py-4 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] transition-colors font-mono uppercase"
                 />
               </div>
@@ -515,7 +345,7 @@ function ChatApp() {
             <button onClick={() => setShowThemePicker(!showThemePicker)} className="text-zinc-500 hover:text-[var(--crack-orange)]">
               <Palette className="w-4 h-4" />
             </button>
-            <button onClick={handleSignOut} className="text-zinc-500 hover:text-red-500">
+            <button onClick={() => setIsJoined(false)} className="text-zinc-500 hover:text-red-500">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -584,7 +414,7 @@ function ChatApp() {
                     {msg.sender}
                   </span>
                   <span className="text-[9px] text-zinc-600 font-mono">
-                    {msg.timestamp && (msg.timestamp instanceof Timestamp ? msg.timestamp.toDate() : new Date(msg.timestamp)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
                 
@@ -686,9 +516,9 @@ function ChatApp() {
                       whileTap={{ scale: 0.95 }}
                       className="relative aspect-square bg-zinc-800 rounded-sm overflow-hidden cursor-pointer group"
                       onClick={() => handleSendMessage(undefined, { 
-                        type: isStickerMode ? 'sticker' : 'gif', 
-                        url: gif.images.fixed_height.url, 
-                        text: isStickerMode ? 'Sent a Sticker' : 'Sent a GIF' 
+                         type: isStickerMode ? 'sticker' : 'gif', 
+                         url: gif.images.fixed_height.url, 
+                         text: isStickerMode ? 'Sent a Sticker' : 'Sent a GIF' 
                       })}
                     >
                       <img 
