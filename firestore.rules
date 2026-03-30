@@ -1,0 +1,103 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: rooms
+    // Document ID: auto-generated or user-provided
+    // Fields:
+    //   - name: string (required, 1-50 chars)
+    //   - password: string (optional, 0-50 chars)
+    //   - createdAt: timestamp (required)
+    //   - createdBy: string (required, UID)
+    //
+    // Collection: rooms/{roomId}/messages
+    // Document ID: auto-generated
+    // Fields:
+    //   - text: string (optional, 0-1000 chars)
+    //   - sender: string (required, 1-50 chars)
+    //   - color: string (required)
+    //   - type: string (required, enum: text, emoji, gif, sticker)
+    //   - url: string (optional, URL)
+    //   - timestamp: timestamp (required)
+    //   - uid: string (required, UID)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "yy2561171@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidRoom(data) {
+      return hasOnlyAllowedFields(['name', 'password', 'createdAt', 'createdBy']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 50 &&
+             (!('password' in data) || (data.password is string && data.password.size() <= 50)) &&
+             data.createdAt is timestamp &&
+             data.createdBy == request.auth.uid;
+    }
+
+    function isValidMessage(data) {
+      return hasOnlyAllowedFields(['text', 'sender', 'color', 'type', 'url', 'timestamp', 'uid']) &&
+             (!('text' in data) || (data.text is string && data.text.size() <= 1000)) &&
+             data.sender is string && data.sender.size() > 0 && data.sender.size() <= 50 &&
+             data.color is string &&
+             data.type in ['text', 'emoji', 'gif', 'sticker'] &&
+             (!('url' in data) || isValidUrl(data.url)) &&
+             data.timestamp is timestamp &&
+             data.uid == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /rooms/{roomId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidRoom(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        // We allow creation if authenticated and data is valid
+        allow create: if isAuthenticated() && isValidMessage(request.resource.data);
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isOwner(userId) && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role);
+    }
+  }
+}

@@ -1,6 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { Send, User, Hash, Shield, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search } from 'lucide-react';
+import React, { useState, useEffect, useRef, ErrorInfo, ReactNode, Component } from 'react';
+import { 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  limit, 
+  serverTimestamp, 
+  doc, 
+  setDoc, 
+  getDoc,
+  getDocs,
+  getDocFromServer,
+  Timestamp
+} from 'firebase/firestore';
+import { 
+  signInAnonymously, 
+  onAuthStateChanged, 
+  User as FirebaseUser 
+} from 'firebase/auth';
+import { auth, db } from './firebase';
+import { Send, User, Hash, Shield, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
@@ -9,17 +29,58 @@ interface Message {
   id: string;
   text: string;
   sender: string;
-  timestamp: string;
+  timestamp: any;
   color: string;
   type: 'text' | 'emoji' | 'gif' | 'sticker';
   url?: string;
+  uid: string;
 }
 
 interface Room {
   id: string;
   name: string;
   hasPassword?: boolean;
+  password?: string;
 }
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+// ... (skipping some lines)
 
 const COLORS = [
   'text-red-400', 'text-blue-400', 'text-green-400', 
@@ -40,11 +101,18 @@ const THEMES = [
 ];
 
 export default function App() {
-  const [socket, setSocket] = useState<Socket | null>(null);
+  return (
+    <ChatApp />
+  );
+}
+
+function ChatApp() {
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
-  const [username, setUsername] = useState('');
-  const [userColor, setUserColor] = useState('');
+  const [username, setUsername] = useState(localStorage.getItem('crackchat_username') || '');
+  const [userColor, setUserColor] = useState(localStorage.getItem('crackchat_color') || '');
   const [isJoined, setIsJoined] = useState(false);
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -66,73 +134,145 @@ export default function App() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Initialize Auth
   useEffect(() => {
-    const newSocket = io();
-    setSocket(newSocket);
-
-    newSocket.on('room_list', (roomList: Room[]) => {
-      setRooms(roomList);
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        setUser(u);
+      } else {
+        signInAnonymously(auth).catch(e => console.error("Auth failed", e));
+      }
+      setIsAuthReady(true);
     });
 
-    newSocket.on('joined_room', (data: { roomId: string, name: string, messages: Message[] }) => {
-      setCurrentRoom({ id: data.roomId, name: data.name });
-      setMessages(data.messages);
-      setIsJoined(true);
-      setError('');
-    });
-
-    newSocket.on('receive_message', (message: Message) => {
-      setMessages((prev) => [...prev, message]);
-    });
-
-    newSocket.on('error', (msg: string) => {
-      setError(msg);
-    });
-
-    newSocket.emit('get_rooms');
-
-    return () => {
-      newSocket.close();
+    // Test connection
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration.");
+        }
+      }
     };
+    testConnection();
+
+    return () => unsubscribe();
   }, []);
+
+  // Fetch Rooms
+  useEffect(() => {
+    if (!isAuthReady) return;
+
+    const q = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const roomList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Room[];
+      setRooms(roomList);
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'rooms'));
+
+    return () => unsubscribe();
+  }, [isAuthReady]);
+
+  // Fetch Messages for current room
+  useEffect(() => {
+    if (!isAuthReady || !currentRoom) return;
+
+    const q = query(
+      collection(db, 'rooms', currentRoom.id, 'messages'), 
+      orderBy('timestamp', 'asc'),
+      limit(100)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Message[];
+      setMessages(msgs);
+    }, (err) => handleFirestoreError(err, OperationType.LIST, `rooms/${currentRoom.id}/messages`));
+
+    return () => unsubscribe();
+  }, [isAuthReady, currentRoom]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleJoinRoom = (roomId: string, password?: string) => {
+  const handleJoinRoom = (room: Room, password?: string) => {
     if (!username.trim()) {
       setError('Please choose a codename first');
       return;
     }
-    socket?.emit('join_room', { roomId, password });
+
+    if (room.password && room.password !== password) {
+      setError('Incorrect password');
+      return;
+    }
+
+    setCurrentRoom(room);
+    setIsJoined(true);
+    setError('');
+    
+    // Save identity
+    localStorage.setItem('crackchat_username', username);
+    localStorage.setItem('crackchat_color', userColor);
   };
 
-  const handleCreateRoom = (e: React.FormEvent) => {
+  const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newRoomName.trim()) {
-      const roomId = newRoomName.toLowerCase().replace(/\s+/g, '-');
-      socket?.emit('create_room', { id: roomId, name: newRoomName, password: newRoomPass });
-      setNewRoomName('');
-      setNewRoomPass('');
-      setShowRoomCreate(false);
+    if (newRoomName.trim() && user) {
+      try {
+        const roomId = newRoomName.toLowerCase().replace(/\s+/g, '-');
+        const roomRef = doc(db, 'rooms', roomId);
+        
+        // Check if exists
+        const snap = await getDoc(roomRef);
+        if (snap.exists()) {
+          setError('Room ID already exists');
+          return;
+        }
+
+        await setDoc(roomRef, {
+          name: newRoomName,
+          password: newRoomPass || null,
+          createdAt: serverTimestamp(),
+          createdBy: user.uid
+        });
+
+        setNewRoomName('');
+        setNewRoomPass('');
+        setShowRoomCreate(false);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'rooms');
+      }
     }
   };
 
-  const handleSendMessage = (e?: React.FormEvent, customData?: Partial<Message>) => {
+  const handleSendMessage = async (e?: React.FormEvent, customData?: Partial<Message>) => {
     e?.preventDefault();
-    if ((inputText.trim() || customData) && socket && isJoined && currentRoom) {
-      socket.emit('send_message', {
-        roomId: currentRoom.id,
-        text: customData?.text || inputText,
-        sender: username,
-        color: userColor,
-        type: customData?.type || 'text',
-        url: customData?.url
-      });
-      setInputText('');
-      setShowEmojiPicker(false);
-      setShowGifPicker(false);
+    if ((inputText.trim() || customData) && user && isJoined && currentRoom) {
+      try {
+        const messageData = {
+          text: customData?.text || inputText,
+          sender: username,
+          color: userColor,
+          type: customData?.type || 'text',
+          url: customData?.url || null,
+          timestamp: serverTimestamp(),
+          uid: user.uid
+        };
+
+        await addDoc(collection(db, 'rooms', currentRoom.id, 'messages'), messageData);
+        
+        setInputText('');
+        setShowEmojiPicker(false);
+        setShowGifPicker(false);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `rooms/${currentRoom.id}/messages`);
+      }
     }
   };
 
@@ -278,7 +418,7 @@ export default function App() {
                           />
                         )}
                         <button 
-                          onClick={() => handleJoinRoom(room.id, joinPass)}
+                          onClick={() => handleJoinRoom(room, joinPass)}
                           className="text-[10px] font-black uppercase text-[var(--crack-orange)] opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           Join
@@ -324,7 +464,7 @@ export default function App() {
           {rooms.map(room => (
             <button
               key={room.id}
-              onClick={() => handleJoinRoom(room.id)}
+              onClick={() => handleJoinRoom(room)}
               className={cn(
                 "w-full flex items-center space-x-2 p-2 -mx-2 transition-all group",
                 currentRoom?.id === room.id ? "text-[var(--crack-orange)] bg-[var(--crack-orange)]/10" : "text-zinc-500 hover:text-white"
@@ -379,7 +519,7 @@ export default function App() {
                     {msg.sender}
                   </span>
                   <span className="text-[9px] text-zinc-600 font-mono">
-                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {msg.timestamp && (msg.timestamp instanceof Timestamp ? msg.timestamp.toDate() : new Date(msg.timestamp)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
                 
