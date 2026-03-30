@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  --crack-orange: #f97316;
+  --crack-bg: #050505;
+  --crack-surface: #18181b;
+}
+
+.theme-neon-green {
+  --crack-orange: #22c55e;
+}
+
+.theme-cyber-pink {
+  --crack-orange: #ec4899;
+}
+
+.theme-deep-blue {
+  --crack-orange: #3b82f6;
+}
+
+.theme-gold {
+  --crack-orange: #eab308;
+}
+
+.theme-blood-red {
+  --crack-orange: #ef4444;
+}

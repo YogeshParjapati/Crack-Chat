@@ -1,0 +1,5 @@
+{
+  "name": "CrackChat",
+  "description": "A simple, anonymous real-time chat platform where you can talk with friends without restrictions or login.",
+  "requestFramePermissions": []
+}
