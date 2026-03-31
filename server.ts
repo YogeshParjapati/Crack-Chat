@@ -15,24 +15,40 @@ async function startServer() {
   const PORT = 3000;
 
   // Socket.io logic
-  const rooms: Record<string, any[]> = {
+  const messages: Record<string, any[]> = {
     'global': []
   };
+  const rooms = [
+    { id: 'global', name: 'The Void' },
+    { id: 'anime', name: 'Anime Lounge' },
+    { id: 'gaming', name: 'Gaming Zone' },
+    { id: 'dev', name: 'Dev Den' }
+  ];
 
   io.on("connection", (socket) => {
     console.log("A user connected:", socket.id);
+    
+    // Send initial room list
+    socket.emit("update-rooms", rooms);
 
     socket.on("join-room", (roomId) => {
       socket.join(roomId);
       console.log(`User ${socket.id} joined room: ${roomId}`);
       // Send existing messages in the room
-      socket.emit("room-messages", rooms[roomId] || []);
+      socket.emit("room-messages", messages[roomId] || []);
+    });
+
+    socket.on("create-room", (newRoom) => {
+      if (!rooms.find(r => r.id === newRoom.id)) {
+        rooms.push(newRoom);
+        io.emit("update-rooms", rooms);
+      }
     });
 
     socket.on("send-message", (data) => {
       const { roomId, message } = data;
-      if (!rooms[roomId]) rooms[roomId] = [];
-      rooms[roomId].push(message);
+      if (!messages[roomId]) messages[roomId] = [];
+      messages[roomId].push(message);
       io.to(roomId).emit("new-message", message);
     });
 

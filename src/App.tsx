@@ -70,7 +70,7 @@ function ChatApp() {
   });
   const [isJoined, setIsJoined] = useState(false);
   const [currentRoom, setCurrentRoom] = useState<Room>(INITIAL_ROOMS[0]);
-  const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [showRoomCreate, setShowRoomCreate] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomPass, setNewRoomPass] = useState('');
@@ -100,6 +100,10 @@ function ChatApp() {
 
     newSocket.on("new-message", (msg: Message) => {
       setMessages(prev => [...prev, msg]);
+    });
+
+    newSocket.on("update-rooms", (updatedRooms: Room[]) => {
+      setRooms(updatedRooms);
     });
 
     return () => {
@@ -148,7 +152,7 @@ function ChatApp() {
         password: newRoomPass || undefined
       };
       
-      setRooms(prev => [...prev, newRoom]);
+      socket?.emit("create-room", newRoom);
       setNewRoomName('');
       setNewRoomPass('');
       setShowRoomCreate(false);
@@ -335,11 +339,7 @@ function ChatApp() {
 
   return (
     <div 
-      onCopy={(e) => e.preventDefault()}
-      onPaste={(e) => e.preventDefault()}
-      onCut={(e) => e.preventDefault()}
-      onContextMenu={(e) => e.preventDefault()}
-      className={cn("flex h-screen bg-[#050505] text-white font-sans overflow-hidden transition-all duration-700 relative select-none", currentTheme.class)}
+      className={cn("flex h-screen bg-[#050505] text-white font-sans overflow-hidden transition-all duration-700 relative", currentTheme.class)}
     >
       {currentTheme.bgImage && (
         <div 
@@ -595,9 +595,8 @@ function ChatApp() {
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              onPaste={(e) => e.preventDefault()}
               placeholder="TRANSMIT MESSAGE..."
-              className="flex-1 bg-transparent py-4 px-6 focus:outline-none font-mono text-sm uppercase tracking-tighter select-text"
+              className="flex-1 bg-transparent py-4 px-6 focus:outline-none font-mono text-sm uppercase tracking-tighter"
             />
             
             <button
