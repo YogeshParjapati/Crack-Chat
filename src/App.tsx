@@ -197,7 +197,7 @@ function ChatApp() {
 
   // Rooms Listener
   useEffect(() => {
-    if (!isAuthReady) return;
+    if (!isAuthReady || !user) return;
     
     const q = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -207,7 +207,7 @@ function ChatApp() {
       })) as Room[];
       
       // Seed global room if empty
-      if (roomList.length === 0 && user) {
+      if (roomList.length === 0) {
         const globalRoomId = 'global';
         setDoc(doc(db, 'rooms', globalRoomId), {
           name: 'The Void',
@@ -229,7 +229,7 @@ function ChatApp() {
 
   // Messages Listener
   useEffect(() => {
-    if (!isAuthReady || !currentRoom) return;
+    if (!isAuthReady || !user || !currentRoom) return;
 
     const q = query(
       collection(db, `rooms/${currentRoom.id}/messages`), 
@@ -248,7 +248,7 @@ function ChatApp() {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentRoom]);
+  }, [isAuthReady, user, currentRoom]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
