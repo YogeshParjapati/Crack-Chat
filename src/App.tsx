@@ -1,30 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Hash, Shield, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, LogIn, LogOut } from 'lucide-react';
+import { io, Socket } from 'socket.io-client';
+import { Send, User, Hash, Shield, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
-import { 
-  collection, 
-  addDoc, 
-  onSnapshot, 
-  query, 
-  orderBy, 
-  serverTimestamp, 
-  doc, 
-  setDoc, 
-  getDoc,
-  getDocFromServer,
-  Timestamp,
-  limit
-} from 'firebase/firestore';
-import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged, 
-  signOut,
-  User as FirebaseUser
-} from 'firebase/auth';
-import { db, auth } from './firebase';
 
 interface Message {
   id: string;
@@ -42,58 +21,6 @@ interface Room {
   name: string;
   hasPassword?: boolean;
   password?: string;
-  createdAt?: number;
-}
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
 }
 
 const COLORS = [
@@ -128,8 +55,7 @@ export default function App() {
 }
 
 function ChatApp() {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [username, setUsername] = useState(localStorage.getItem('crackchat_username') || '');
@@ -143,7 +69,7 @@ function ChatApp() {
     return id;
   });
   const [isJoined, setIsJoined] = useState(false);
-  const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
+  const [currentRoom, setCurrentRoom] = useState<Room>(INITIAL_ROOMS[0]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [showRoomCreate, setShowRoomCreate] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
@@ -163,119 +89,45 @@ function ChatApp() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auth Listener
+  // Initialize Socket
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setIsAuthReady(true);
-      if (u) {
-        setUsername(u.displayName || 'User');
-        // Create user profile in Firestore
-        const userRef = doc(db, 'users', u.uid);
-        setDoc(userRef, {
-          email: u.email,
-          role: 'user'
-        }, { merge: true }).catch(err => console.error("Profile sync failed", err));
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+    const newSocket = io();
+    setSocket(newSocket);
 
-  // Connection Test
-  useEffect(() => {
-    async function testConnection() {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration.");
-        }
-      }
-    }
-    testConnection();
-  }, []);
-
-  // Rooms Listener
-  useEffect(() => {
-    if (!isAuthReady || !user) return;
-    
-    const q = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const roomList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Room[];
-      
-      // Seed global room if empty
-      if (roomList.length === 0) {
-        const globalRoomId = 'global';
-        setDoc(doc(db, 'rooms', globalRoomId), {
-          name: 'The Void',
-          hasPassword: false,
-          createdAt: Date.now()
-        }).catch(err => console.error("Failed to seed global room", err));
-      }
-
-      setRooms(roomList);
-      if (!currentRoom && roomList.length > 0) {
-        setCurrentRoom(roomList.find(r => r.id === 'global') || roomList[0]);
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'rooms');
-    });
-
-    return () => unsubscribe();
-  }, [isAuthReady, user]);
-
-  // Messages Listener
-  useEffect(() => {
-    if (!isAuthReady || !user || !currentRoom) return;
-
-    const q = query(
-      collection(db, `rooms/${currentRoom.id}/messages`), 
-      orderBy('timestamp', 'asc'),
-      limit(100)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Message[];
+    newSocket.on("room-messages", (msgs: Message[]) => {
       setMessages(msgs);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `rooms/${currentRoom?.id}/messages`);
     });
 
-    return () => unsubscribe();
-  }, [isAuthReady, user, currentRoom]);
+    newSocket.on("new-message", (msg: Message) => {
+      setMessages(prev => [...prev, msg]);
+    });
+
+    newSocket.on("update-rooms", (updatedRooms: Room[]) => {
+      setRooms(updatedRooms);
+    });
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (socket && isJoined && currentRoom) {
+      socket.emit("join-room", currentRoom.id);
+    }
+  }, [socket, isJoined, currentRoom]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (err) {
-      setError('Login failed');
-      console.error(err);
-    }
-  };
-
-  const handleLogout = () => {
-    signOut(auth);
-    setIsJoined(false);
-  };
-
   const handleJoinRoom = (room: Room, password?: string) => {
-    if (!user) {
-      setError('Please login first');
+    if (!username.trim()) {
+      setError('Please choose a codename first');
       return;
     }
 
-    if (room.hasPassword && room.password !== password) {
+    if (room.password && room.password !== password) {
       setError('Incorrect password');
       return;
     }
@@ -289,49 +141,43 @@ function ChatApp() {
     localStorage.setItem('crackchat_color', userColor);
   };
 
-  const handleCreateRoom = async (e: React.FormEvent) => {
+  const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newRoomName.trim() && user) {
+    if (newRoomName.trim()) {
       const roomId = newRoomName.toLowerCase().replace(/\s+/g, '-');
-      const newRoomData = {
+      const newRoom: Room = {
+        id: roomId,
         name: newRoomName,
         hasPassword: !!newRoomPass,
-        password: newRoomPass || null,
-        createdAt: Date.now()
+        password: newRoomPass || undefined
       };
       
-      try {
-        await setDoc(doc(db, 'rooms', roomId), newRoomData);
-        setNewRoomName('');
-        setNewRoomPass('');
-        setShowRoomCreate(false);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `rooms/${roomId}`);
-      }
+      socket?.emit("create-room", newRoom);
+      setNewRoomName('');
+      setNewRoomPass('');
+      setShowRoomCreate(false);
     }
   };
 
-  const handleSendMessage = async (e?: React.FormEvent, customData?: Partial<Message>) => {
+  const handleSendMessage = (e?: React.FormEvent, customData?: Partial<Message>) => {
     e?.preventDefault();
-    if ((inputText.trim() || customData) && user && isJoined && currentRoom) {
-      const messageData = {
+    if ((inputText.trim() || customData) && socket && isJoined && currentRoom) {
+      const messageData: Message = {
+        id: Math.random().toString(36).substr(2, 9),
         text: customData?.text || inputText,
         sender: username,
         color: userColor,
         type: customData?.type || 'text',
-        url: customData?.url || null,
+        url: customData?.url || undefined,
         timestamp: Date.now(),
-        uid: user.uid
+        uid: userId
       };
 
-      try {
-        await addDoc(collection(db, `rooms/${currentRoom.id}/messages`), messageData);
-        setInputText('');
-        setShowEmojiPicker(false);
-        setShowGifPicker(false);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `rooms/${currentRoom.id}/messages`);
-      }
+      socket.emit("send-message", { roomId: currentRoom.id, message: messageData });
+      
+      setInputText('');
+      setShowEmojiPicker(false);
+      setShowGifPicker(false);
     }
   };
 
@@ -387,40 +233,16 @@ function ChatApp() {
             {/* Left: Identity */}
             <div className="space-y-6 bg-zinc-900/30 p-6 border border-zinc-800">
               <h2 className="text-xl font-black uppercase tracking-tighter border-b border-zinc-800 pb-2">Identity</h2>
-              
-              {!user ? (
-                <button 
-                  onClick={handleLogin}
-                  className="w-full bg-white text-black font-black py-4 flex items-center justify-center space-x-2 hover:bg-zinc-200 transition-all"
-                >
-                  <LogIn className="w-5 h-5" />
-                  <span>LOGIN WITH GOOGLE</span>
-                </button>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-4 p-4 bg-zinc-900 border border-zinc-800">
-                    <img src={user.photoURL || ''} className="w-12 h-12 rounded-full border-2 border-[var(--crack-orange)]" alt="avatar" />
-                    <div className="flex-1">
-                      <p className="text-xs text-zinc-500 uppercase font-bold">Logged in as</p>
-                      <p className="font-black uppercase tracking-tighter">{user.displayName}</p>
-                    </div>
-                    <button onClick={handleLogout} className="text-zinc-500 hover:text-red-500">
-                      <LogOut className="w-5 h-5" />
-                    </button>
-                  </div>
-                  
-                  <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
-                    <input
-                      type="text"
-                      placeholder="CODENAME"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 py-4 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] transition-colors font-mono uppercase"
-                    />
-                  </div>
-                </div>
-              )}
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="CODENAME"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 py-4 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] transition-colors font-mono uppercase"
+                />
+              </div>
               
               <div className="space-y-2">
                 <label className="text-[10px] text-zinc-500 uppercase font-bold">Select Vibe</label>
@@ -614,7 +436,7 @@ function ChatApp() {
                   {msg.type === 'text' && (
                     <div className={cn(
                       "text-zinc-300 text-sm leading-relaxed bg-zinc-900/30 p-3 border-l-2 border-zinc-800 transition-all duration-500",
-                      user && msg.uid !== user.uid ? "blur-md hover:blur-none cursor-help" : ""
+                      msg.uid !== userId ? "blur-md hover:blur-none cursor-help" : ""
                     )}>
                       {msg.text}
                     </div>
@@ -622,7 +444,7 @@ function ChatApp() {
                   {(msg.type === 'gif' || msg.type === 'sticker') && (
                     <div className={cn(
                       "transition-all duration-500",
-                      user && msg.uid !== user.uid ? "blur-xl hover:blur-none cursor-help" : ""
+                      msg.uid !== userId ? "blur-xl hover:blur-none cursor-help" : ""
                     )}>
                       <img 
                         src={msg.url} 
