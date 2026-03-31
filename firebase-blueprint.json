@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Room",
+      "description": "A chat room",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "hasPassword": { "type": "boolean" },
+        "password": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A chat message",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "sender": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "color": { "type": "string" },
+        "type": { "type": "string", "enum": ["text", "emoji", "gif", "sticker"] },
+        "url": { "type": "string" },
+        "uid": { "type": "string" }
+      },
+      "required": ["text", "sender", "timestamp", "uid"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A user profile",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "email": { "type": "string" }
+      },
+      "required": ["role", "email"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Chat rooms"
+    },
+    "/rooms/{roomId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages within a room"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    }
+  }
+}
