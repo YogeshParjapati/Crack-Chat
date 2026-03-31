@@ -60,6 +60,14 @@ function ChatApp() {
   const [inputText, setInputText] = useState('');
   const [username, setUsername] = useState(localStorage.getItem('crackchat_username') || '');
   const [userColor, setUserColor] = useState(localStorage.getItem('crackchat_color') || COLORS[Math.floor(Math.random() * COLORS.length)]);
+  const [userId] = useState(() => {
+    let id = localStorage.getItem('crackchat_userid');
+    if (!id) {
+      id = Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('crackchat_userid', id);
+    }
+    return id;
+  });
   const [isJoined, setIsJoined] = useState(false);
   const [currentRoom, setCurrentRoom] = useState<Room>(INITIAL_ROOMS[0]);
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
@@ -158,7 +166,7 @@ function ChatApp() {
         type: customData?.type || 'text',
         url: customData?.url || undefined,
         timestamp: Date.now(),
-        uid: socket.id || 'anonymous'
+        uid: userId
       };
 
       socket.emit("send-message", { roomId: currentRoom.id, message: messageData });
@@ -326,7 +334,13 @@ function ChatApp() {
   }
 
   return (
-    <div className={cn("flex h-screen bg-[#050505] text-white font-sans overflow-hidden transition-all duration-700 relative", currentTheme.class)}>
+    <div 
+      onCopy={(e) => e.preventDefault()}
+      onPaste={(e) => e.preventDefault()}
+      onCut={(e) => e.preventDefault()}
+      onContextMenu={(e) => e.preventDefault()}
+      className={cn("flex h-screen bg-[#050505] text-white font-sans overflow-hidden transition-all duration-700 relative select-none", currentTheme.class)}
+    >
       {currentTheme.bgImage && (
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
@@ -420,17 +434,25 @@ function ChatApp() {
                 
                 <div className="max-w-2xl">
                   {msg.type === 'text' && (
-                    <div className="text-zinc-300 text-sm leading-relaxed bg-zinc-900/30 p-3 border-l-2 border-zinc-800">
+                    <div className={cn(
+                      "text-zinc-300 text-sm leading-relaxed bg-zinc-900/30 p-3 border-l-2 border-zinc-800 transition-all duration-500",
+                      msg.uid !== userId ? "blur-md hover:blur-none cursor-help" : ""
+                    )}>
                       {msg.text}
                     </div>
                   )}
                   {(msg.type === 'gif' || msg.type === 'sticker') && (
-                    <img 
-                      src={msg.url} 
-                      alt="media" 
-                      className="max-w-[200px] rounded-sm border border-zinc-800"
-                      referrerPolicy="no-referrer"
-                    />
+                    <div className={cn(
+                      "transition-all duration-500",
+                      msg.uid !== userId ? "blur-xl hover:blur-none cursor-help" : ""
+                    )}>
+                      <img 
+                        src={msg.url} 
+                        alt="media" 
+                        className="max-w-[200px] rounded-sm border border-zinc-800"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
                   )}
                 </div>
               </motion.div>
@@ -573,8 +595,9 @@ function ChatApp() {
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
+              onPaste={(e) => e.preventDefault()}
               placeholder="TRANSMIT MESSAGE..."
-              className="flex-1 bg-transparent py-4 px-6 focus:outline-none font-mono text-sm uppercase tracking-tighter"
+              className="flex-1 bg-transparent py-4 px-6 focus:outline-none font-mono text-sm uppercase tracking-tighter select-text"
             />
             
             <button
