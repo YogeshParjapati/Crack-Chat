@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Hash, Shield, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle } from 'lucide-react';
+import { Send, User, Hash, Shield, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
@@ -25,7 +25,7 @@ interface Message {
   sender: string;
   timestamp: number;
   color: string;
-  type: 'text' | 'emoji' | 'gif' | 'sticker';
+  type: 'text' | 'emoji' | 'gif' | 'sticker' | 'image' | 'video';
   url?: string;
   uid: string;
   replyTo?: {
@@ -150,6 +150,8 @@ function ChatApp() {
   const [replyTo, setReplyTo] = useState<{ text: string; sender: string } | null>(null);
   const [callState, setCallState] = useState<{ type: 'voice' | 'video'; status: 'calling' | 'incoming' | 'active'; peer?: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Rooms Listener & Cleanup
   useEffect(() => {
@@ -357,6 +359,33 @@ function ChatApp() {
         handleFirestoreError(error, OperationType.WRITE, `rooms/${currentRoom.id}/messages`);
       }
     }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentRoom) return;
+
+    // Firestore document limit is 1MB. Let's limit files to 500KB to be safe with overhead.
+    if (file.size > 500 * 1024) {
+      alert('File too large. Please select a file smaller than 500KB.');
+      return;
+    }
+
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      const type = file.type.startsWith('video/') ? 'video' : 'image';
+      
+      await handleSendMessage(undefined, {
+        text: `Shared a ${type}`,
+        type: type,
+        url: base64
+      });
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleStartCall = async (type: 'voice' | 'video') => {
@@ -700,13 +729,22 @@ function ChatApp() {
                       {msg.text}
                     </div>
                   )}
-                  {(msg.type === 'gif' || msg.type === 'sticker') && (
+                  {(msg.type === 'gif' || msg.type === 'sticker' || msg.type === 'image') && (
                     <div className="transition-all duration-500">
                       <img 
                         src={msg.url} 
                         alt="media" 
-                        className="max-w-full sm:max-w-[200px] rounded-sm border border-zinc-800"
+                        className="max-w-full sm:max-w-[300px] rounded-sm border border-zinc-800 shadow-lg"
                         referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  )}
+                  {msg.type === 'video' && (
+                    <div className="transition-all duration-500">
+                      <video 
+                        src={msg.url} 
+                        controls
+                        className="max-w-full sm:max-w-[300px] rounded-sm border border-zinc-800 shadow-lg"
                       />
                     </div>
                   )}
@@ -856,6 +894,21 @@ function ChatApp() {
               >
                 <ImageIcon className="w-5 h-5" />
               </button>
+              <button 
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", isUploading && "animate-pulse")}
+              >
+                {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
+              </button>
+              <input 
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept="image/*,video/*"
+                className="hidden"
+              />
             </div>
             
             <input

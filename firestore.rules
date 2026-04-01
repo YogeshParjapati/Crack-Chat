@@ -59,7 +59,7 @@ service cloud.firestore {
              data.text is string && data.text.size() > 0 && data.text.size() < 2000 &&
              data.sender is string && data.sender.size() > 0 && data.sender.size() < 50 &&
              data.color is string &&
-             data.type in ['text', 'emoji', 'gif', 'sticker'] &&
+             data.type in ['text', 'emoji', 'gif', 'sticker', 'image', 'video'] &&
              data.timestamp is number &&
              data.uid is string &&
              (!('replyTo' in data) || (data.replyTo is map && data.replyTo.keys().hasAll(['text', 'sender'])));
