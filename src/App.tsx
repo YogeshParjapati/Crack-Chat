@@ -127,7 +127,7 @@ function ChatApp() {
   const [inputText, setInputText] = useState('');
   const [username, setUsername] = useState(localStorage.getItem('crackchat_username') || '');
   const [userColor, setUserColor] = useState(localStorage.getItem('crackchat_color') || COLORS[Math.floor(Math.random() * COLORS.length)]);
-  const [isJoined, setIsJoined] = useState(false);
+  const [isJoined, setIsJoined] = useState(() => localStorage.getItem('crackchat_joined') === 'true');
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [showRoomCreate, setShowRoomCreate] = useState(false);
@@ -204,8 +204,12 @@ function ChatApp() {
       }
 
       setRooms(roomList.filter(r => !staleRooms.find(sr => sr.id === r.id)));
+      
+      // Auto-rejoin persisted room
+      const savedRoomId = localStorage.getItem('crackchat_roomid');
       if (!currentRoom && roomList.length > 0) {
-        setCurrentRoom(roomList.find(r => r.id === globalRoomId) || roomList[0]);
+        const roomToJoin = roomList.find(r => r.id === savedRoomId) || roomList.find(r => r.id === globalRoomId) || roomList[0];
+        setCurrentRoom(roomToJoin);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'rooms');
@@ -295,9 +299,11 @@ function ChatApp() {
     setIsJoined(true);
     setError('');
     
-    // Save identity
+    // Save identity and state
     localStorage.setItem('crackchat_username', username);
     localStorage.setItem('crackchat_color', userColor);
+    localStorage.setItem('crackchat_joined', 'true');
+    localStorage.setItem('crackchat_roomid', room.id);
   };
 
   const handleCreateRoom = async (e: React.FormEvent) => {
@@ -327,7 +333,7 @@ function ChatApp() {
   const handleSendMessage = async (e?: React.FormEvent, customData?: Partial<Message>) => {
     e?.preventDefault();
     if ((inputText.trim() || customData) && isJoined && currentRoom) {
-      const messageData = {
+      const messageData: any = {
         text: customData?.text || inputText,
         sender: username,
         color: userColor,
@@ -335,8 +341,11 @@ function ChatApp() {
         url: customData?.url || null,
         timestamp: Date.now(),
         uid: userId,
-        replyTo: replyTo || undefined
       };
+
+      if (replyTo) {
+        messageData.replyTo = replyTo;
+      }
 
       try {
         await addDoc(collection(db, `rooms/${currentRoom.id}/messages`), messageData);
@@ -854,13 +863,18 @@ function ChatApp() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder="TRANSMIT..."
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck="false"
               className="flex-1 bg-transparent py-4 px-3 md:px-6 focus:outline-none font-mono text-xs md:text-sm uppercase tracking-tighter"
             />
             
             <button
               type="submit"
-              disabled={!inputText.trim()}
-              className="px-4 md:px-6 text-zinc-500 hover:text-[var(--crack-orange)] disabled:opacity-30 transition-colors"
+              className={cn(
+                "px-4 md:px-6 transition-all active:scale-90",
+                inputText.trim() ? "text-[var(--crack-orange)]" : "text-zinc-700 opacity-30"
+              )}
             >
               <Send className="w-5 h-5" />
             </button>
