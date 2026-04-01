@@ -1,9 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
 import { Send, User, Hash, Shield, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
+import { 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  serverTimestamp, 
+  doc, 
+  setDoc, 
+  getDoc,
+  getDocFromServer,
+  limit
+} from 'firebase/firestore';
+import { db } from './firebase';
 
 interface Message {
   id: string;
@@ -21,6 +34,53 @@ interface Room {
   name: string;
   hasPassword?: boolean;
   password?: string;
+  createdAt?: number;
+}
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: 'unauthenticated',
+      email: null,
+      emailVerified: false,
+      isAnonymous: true,
+      tenantId: null,
+      providerInfo: []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
 }
 
 const COLORS = [
@@ -41,13 +101,6 @@ const THEMES = [
   { name: 'Forest Shrine', class: 'theme-anime', color: '#4ade80', bgImage: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&q=80&w=1920' },
 ];
 
-const INITIAL_ROOMS: Room[] = [
-  { id: 'global', name: 'The Void' },
-  { id: 'anime', name: 'Anime Lounge' },
-  { id: 'gaming', name: 'Gaming Zone' },
-  { id: 'dev', name: 'Dev Den' }
-];
-
 export default function App() {
   return (
     <ChatApp />
@@ -55,11 +108,6 @@ export default function App() {
 }
 
 function ChatApp() {
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputText, setInputText] = useState('');
-  const [username, setUsername] = useState(localStorage.getItem('crackchat_username') || '');
-  const [userColor, setUserColor] = useState(localStorage.getItem('crackchat_color') || COLORS[Math.floor(Math.random() * COLORS.length)]);
   const [userId] = useState(() => {
     let id = localStorage.getItem('crackchat_userid');
     if (!id) {
@@ -68,8 +116,12 @@ function ChatApp() {
     }
     return id;
   });
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [username, setUsername] = useState(localStorage.getItem('crackchat_username') || '');
+  const [userColor, setUserColor] = useState(localStorage.getItem('crackchat_color') || COLORS[Math.floor(Math.random() * COLORS.length)]);
   const [isJoined, setIsJoined] = useState(false);
-  const [currentRoom, setCurrentRoom] = useState<Room>(INITIAL_ROOMS[0]);
+  const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [showRoomCreate, setShowRoomCreate] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
@@ -89,33 +141,58 @@ function ChatApp() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize Socket
+  // Rooms Listener
   useEffect(() => {
-    const newSocket = io();
-    setSocket(newSocket);
+    const q = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const roomList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Room[];
+      
+      // Seed global room if empty
+      if (roomList.length === 0) {
+        const globalRoomId = 'global';
+        setDoc(doc(db, 'rooms', globalRoomId), {
+          name: 'The Void',
+          hasPassword: false,
+          createdAt: Date.now()
+        }).catch(err => console.error("Failed to seed global room", err));
+      }
 
-    newSocket.on("room-messages", (msgs: Message[]) => {
-      setMessages(msgs);
+      setRooms(roomList);
+      if (!currentRoom && roomList.length > 0) {
+        setCurrentRoom(roomList.find(r => r.id === 'global') || roomList[0]);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'rooms');
     });
 
-    newSocket.on("new-message", (msg: Message) => {
-      setMessages(prev => [...prev, msg]);
-    });
-
-    newSocket.on("update-rooms", (updatedRooms: Room[]) => {
-      setRooms(updatedRooms);
-    });
-
-    return () => {
-      newSocket.disconnect();
-    };
+    return () => unsubscribe();
   }, []);
 
+  // Messages Listener
   useEffect(() => {
-    if (socket && isJoined && currentRoom) {
-      socket.emit("join-room", currentRoom.id);
-    }
-  }, [socket, isJoined, currentRoom]);
+    if (!currentRoom) return;
+
+    const q = query(
+      collection(db, `rooms/${currentRoom.id}/messages`), 
+      orderBy('timestamp', 'asc'),
+      limit(100)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Message[];
+      setMessages(msgs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `rooms/${currentRoom?.id}/messages`);
+    });
+
+    return () => unsubscribe();
+  }, [currentRoom]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -127,7 +204,7 @@ function ChatApp() {
       return;
     }
 
-    if (room.password && room.password !== password) {
+    if (room.hasPassword && room.password !== password) {
       setError('Incorrect password');
       return;
     }
@@ -141,43 +218,49 @@ function ChatApp() {
     localStorage.setItem('crackchat_color', userColor);
   };
 
-  const handleCreateRoom = (e: React.FormEvent) => {
+  const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newRoomName.trim()) {
       const roomId = newRoomName.toLowerCase().replace(/\s+/g, '-');
-      const newRoom: Room = {
-        id: roomId,
+      const newRoomData = {
         name: newRoomName,
         hasPassword: !!newRoomPass,
-        password: newRoomPass || undefined
+        password: newRoomPass || null,
+        createdAt: Date.now()
       };
       
-      socket?.emit("create-room", newRoom);
-      setNewRoomName('');
-      setNewRoomPass('');
-      setShowRoomCreate(false);
+      try {
+        await setDoc(doc(db, 'rooms', roomId), newRoomData);
+        setNewRoomName('');
+        setNewRoomPass('');
+        setShowRoomCreate(false);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `rooms/${roomId}`);
+      }
     }
   };
 
-  const handleSendMessage = (e?: React.FormEvent, customData?: Partial<Message>) => {
+  const handleSendMessage = async (e?: React.FormEvent, customData?: Partial<Message>) => {
     e?.preventDefault();
-    if ((inputText.trim() || customData) && socket && isJoined && currentRoom) {
-      const messageData: Message = {
-        id: Math.random().toString(36).substr(2, 9),
+    if ((inputText.trim() || customData) && isJoined && currentRoom) {
+      const messageData = {
         text: customData?.text || inputText,
         sender: username,
         color: userColor,
         type: customData?.type || 'text',
-        url: customData?.url || undefined,
+        url: customData?.url || null,
         timestamp: Date.now(),
         uid: userId
       };
 
-      socket.emit("send-message", { roomId: currentRoom.id, message: messageData });
-      
-      setInputText('');
-      setShowEmojiPicker(false);
-      setShowGifPicker(false);
+      try {
+        await addDoc(collection(db, `rooms/${currentRoom.id}/messages`), messageData);
+        setInputText('');
+        setShowEmojiPicker(false);
+        setShowGifPicker(false);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `rooms/${currentRoom.id}/messages`);
+      }
     }
   };
 
@@ -233,15 +316,18 @@ function ChatApp() {
             {/* Left: Identity */}
             <div className="space-y-6 bg-zinc-900/30 p-6 border border-zinc-800">
               <h2 className="text-xl font-black uppercase tracking-tighter border-b border-zinc-800 pb-2">Identity</h2>
-              <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="CODENAME"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 py-4 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] transition-colors font-mono uppercase"
-                />
+              
+              <div className="space-y-4">
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="CODENAME"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 py-4 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] transition-colors font-mono uppercase"
+                  />
+                </div>
               </div>
               
               <div className="space-y-2">

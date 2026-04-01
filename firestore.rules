@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: rooms
+    // Document ID: auto-generated or room-id
+    // Fields:
+    //   - name: string (required) - name of the room
+    //   - hasPassword: bool (optional) - whether the room has a password
+    //   - password: string (optional) - the password
+    //   - createdAt: number (required) - timestamp
+    //
+    // Collection: rooms/{roomId}/messages
+    // Document ID: auto-generated
+    // Fields:
+    //   - text: string (required) - message text
+    //   - sender: string (required) - sender name
+    //   - color: string (required) - sender color
+    //   - type: string (required, enum: text, emoji, gif, sticker) - message type
+    //   - url: string (optional) - media URL
+    //   - timestamp: number (required) - timestamp
+    //   - uid: string (required) - sender UID
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "yy2561171@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidRoom(data) {
+      return data.keys().hasAll(['name', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.createdAt is number;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['text', 'sender', 'color', 'type', 'timestamp', 'uid']) &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 2000 &&
+             data.sender is string && data.sender.size() > 0 && data.sender.size() < 50 &&
+             data.color is string &&
+             data.type in ['text', 'emoji', 'gif', 'sticker'] &&
+             data.timestamp is number &&
+             data.uid is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /rooms/{roomId} {
+      allow read: if true;
+      allow create: if isValidRoom(request.resource.data);
+      allow update: if false;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if true;
+        allow create: if isValidMessage(request.resource.data);
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+
+    match /users/{userId} {
+      allow read, write: if false;
+    }
+    
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

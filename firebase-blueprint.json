@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Room",
+      "description": "A chat room",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the room" },
+        "hasPassword": { "type": "boolean", "description": "Whether the room has a password" },
+        "password": { "type": "string", "description": "The password for the room" },
+        "createdAt": { "type": "number", "description": "Timestamp of creation" }
+      },
+      "required": ["name", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A chat message",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string", "description": "The message text" },
+        "sender": { "type": "string", "description": "The sender's name" },
+        "color": { "type": "string", "description": "The sender's color" },
+        "type": { "type": "string", "enum": ["text", "emoji", "gif", "sticker"], "description": "The type of message" },
+        "url": { "type": "string", "description": "The URL for media messages" },
+        "timestamp": { "type": "number", "description": "Timestamp of the message" },
+        "uid": { "type": "string", "description": "The sender's UID" }
+      },
+      "required": ["text", "sender", "color", "type", "timestamp", "uid"]
+    }
+  },
+  "firestore": {
+    "/rooms": {
+      "schema": "Room",
+      "description": "Collection of chat rooms"
+    },
+    "/rooms/{roomId}/messages": {
+      "schema": "Message",
+      "description": "Collection of messages within a room"
+    }
+  }
+}
