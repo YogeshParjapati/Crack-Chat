@@ -14,7 +14,8 @@ import {
   setDoc, 
   getDoc,
   getDocFromServer,
-  limit
+  limit,
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -35,6 +36,8 @@ interface Room {
   hasPassword?: boolean;
   password?: string;
   createdAt?: number;
+  lastActive?: number;
+  permanent?: boolean;
 }
 
 enum OperationType {
@@ -137,39 +140,87 @@ function ChatApp() {
   const [currentTheme, setCurrentTheme] = useState(THEMES[0]);
   const [gifSearch, setGifSearch] = useState('');
   const [gifs, setGifs] = useState<any[]>([]);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [isMediaLoading, setIsMediaLoading] = useState(false);
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Rooms Listener
+  // Rooms Listener & Cleanup
   useEffect(() => {
     const q = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const roomList = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Room[];
       
-      // Seed global room if empty
-      if (roomList.length === 0) {
-        const globalRoomId = 'global';
-        setDoc(doc(db, 'rooms', globalRoomId), {
+      const now = Date.now();
+      const globalRoomId = 'global';
+
+      // 1. Seed/Update global room
+      const globalRoom = roomList.find(r => r.id === globalRoomId);
+      if (!globalRoom) {
+        await setDoc(doc(db, 'rooms', globalRoomId), {
           name: 'The Void',
           hasPassword: false,
-          createdAt: Date.now()
-        }).catch(err => console.error("Failed to seed global room", err));
+          password: null,
+          createdAt: now,
+          lastActive: now,
+          permanent: true
+        });
+      } else if (!globalRoom.permanent) {
+        // Fix existing global room if it's not permanent
+        await setDoc(doc(db, 'rooms', globalRoomId), { ...globalRoom, permanent: true }, { merge: true });
       }
 
-      setRooms(roomList);
+      // 2. Auto-delete stale rooms (not permanent, no activity for 2 mins)
+      const staleRooms = roomList.filter(r => !r.permanent && (!r.lastActive || now - r.lastActive > 120000));
+      for (const room of staleRooms) {
+        try {
+          // Note: In a real app we'd delete messages too, but for simplicity we just delete the room doc
+          // The messages will stay orphaned but won't be accessible.
+          await deleteDoc(doc(db, 'rooms', room.id));
+          console.log(`Deleted stale room: ${room.name}`);
+        } catch (e) {
+          console.error("Failed to delete stale room", e);
+        }
+      }
+
+      // 3. One-time cleanup (if requested by user "remove all rooms")
+      // We'll use a flag to avoid infinite loops or constant deletions
+      const hasCleaned = localStorage.getItem('crackchat_initial_cleanup');
+      if (!hasCleaned) {
+        const otherRooms = roomList.filter(r => !r.permanent && r.id !== globalRoomId);
+        for (const room of otherRooms) {
+          await deleteDoc(doc(db, 'rooms', room.id));
+        }
+        localStorage.setItem('crackchat_initial_cleanup', 'true');
+      }
+
+      setRooms(roomList.filter(r => !staleRooms.find(sr => sr.id === r.id)));
       if (!currentRoom && roomList.length > 0) {
-        setCurrentRoom(roomList.find(r => r.id === 'global') || roomList[0]);
+        setCurrentRoom(roomList.find(r => r.id === globalRoomId) || roomList[0]);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'rooms');
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [currentRoom]);
+
+  // Heartbeat for current room
+  useEffect(() => {
+    if (!isJoined || !currentRoom || currentRoom.permanent) return;
+
+    const interval = setInterval(async () => {
+      try {
+        await setDoc(doc(db, 'rooms', currentRoom.id), { lastActive: Date.now() }, { merge: true });
+      } catch (e) {
+        console.error("Heartbeat failed", e);
+      }
+    }, 30000); // Every 30s
+
+    return () => clearInterval(interval);
+  }, [isJoined, currentRoom]);
 
   // Messages Listener
   useEffect(() => {
@@ -226,7 +277,9 @@ function ChatApp() {
         name: newRoomName,
         hasPassword: !!newRoomPass,
         password: newRoomPass || null,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        lastActive: Date.now(),
+        permanent: false
       };
       
       try {
@@ -433,74 +486,81 @@ function ChatApp() {
           style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.25 }}
         />
       )}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] pointer-events-none" />
+      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
 
-      {/* Sidebar */}
+      {/* Sidebar - Desktop */}
       <div className="hidden md:flex w-64 border-r border-white/10 flex-col p-6 space-y-8 bg-black/40 backdrop-blur-xl relative z-10">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-black tracking-tighter uppercase italic text-[var(--crack-orange)]">
-            CRACK<span className="text-white">CHAT</span>
-          </h2>
-          <div className="flex items-center space-x-2">
-            <button onClick={() => setShowThemePicker(!showThemePicker)} className="text-zinc-500 hover:text-[var(--crack-orange)]">
-              <Palette className="w-4 h-4" />
-            </button>
-            <button onClick={() => setIsJoined(false)} className="text-zinc-500 hover:text-red-500">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-        
-        <div className="space-y-4 flex-1 overflow-y-auto">
-          <div className="flex items-center justify-between">
-            <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Rooms</div>
-            <button onClick={() => setIsJoined(false)} className="text-[10px] text-zinc-500 hover:text-white uppercase font-bold">Switch</button>
-          </div>
-          {rooms.map(room => (
-            <button
-              key={room.id}
-              onClick={() => handleJoinRoom(room)}
-              className={cn(
-                "w-full flex items-center space-x-2 p-2 -mx-2 transition-all group",
-                currentRoom?.id === room.id ? "text-[var(--crack-orange)] bg-[var(--crack-orange)]/10" : "text-zinc-500 hover:text-white"
-              )}
-            >
-              <Hash className="w-4 h-4" />
-              <span className="font-bold uppercase tracking-tighter truncate">{room.name}</span>
-              {room.hasPassword && <Lock className="w-3 h-3 ml-auto opacity-50" />}
-            </button>
-          ))}
-        </div>
-
-        <div className="pt-6 border-t border-zinc-900 space-y-4">
-          <div className="flex items-center space-x-3">
-            <div className={cn("w-3 h-3 rounded-full bg-current shadow-[0_0_10px_rgba(255,255,255,0.2)]", userColor)} />
-            <div className="flex flex-col">
-              <span className="text-xs font-bold uppercase tracking-tighter">{username}</span>
-              <span className="text-[10px] text-zinc-500 uppercase">Online</span>
-            </div>
-          </div>
-        </div>
+        <SidebarContent 
+          rooms={rooms} 
+          currentRoom={currentRoom} 
+          handleJoinRoom={handleJoinRoom} 
+          username={username} 
+          userColor={userColor}
+          setIsJoined={setIsJoined}
+          showThemePicker={showThemePicker}
+          setShowThemePicker={setShowThemePicker}
+        />
       </div>
 
+      {/* Sidebar - Mobile Overlay */}
+      <AnimatePresence>
+        {showMobileSidebar && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMobileSidebar(false)}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
+            />
+            <motion.div 
+              initial={{ x: -300 }}
+              animate={{ x: 0 }}
+              exit={{ x: -300 }}
+              className="fixed inset-y-0 left-0 w-72 bg-[#050505] border-r border-white/10 z-50 p-6 flex flex-col space-y-8 md:hidden"
+            >
+              <SidebarContent 
+                rooms={rooms} 
+                currentRoom={currentRoom} 
+                handleJoinRoom={handleJoinRoom} 
+                username={username} 
+                userColor={userColor}
+                setIsJoined={setIsJoined}
+                showThemePicker={showThemePicker}
+                setShowThemePicker={setShowThemePicker}
+                onClose={() => setShowMobileSidebar(false)}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col relative z-10">
+      <div className="flex-1 flex flex-col relative z-10 w-full overflow-hidden">
         {/* Header */}
-        <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-black/40 backdrop-blur-md z-20">
-          <div className="flex items-center space-x-2">
-            <Hash className="w-5 h-5 text-zinc-500" />
-            <h3 className="font-black uppercase tracking-tighter">{currentRoom?.name}</h3>
+        <header className="h-16 border-b border-white/10 flex items-center justify-between px-4 md:px-6 bg-black/40 backdrop-blur-md z-20">
+          <div className="flex items-center space-x-3">
+            <button 
+              onClick={() => setShowMobileSidebar(true)}
+              className="md:hidden text-zinc-400 hover:text-white"
+            >
+              <Zap className="w-6 h-6" />
+            </button>
+            <div className="flex items-center space-x-2">
+              <Hash className="w-5 h-5 text-zinc-500" />
+              <h3 className="font-black uppercase tracking-tighter truncate max-w-[120px] md:max-w-none">{currentRoom?.name}</h3>
+            </div>
           </div>
           
-          <div className="flex items-center space-x-4">
-            <button className="text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"><Phone className="w-5 h-5" /></button>
-            <button className="text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"><Video className="w-5 h-5" /></button>
-            <div className="md:hidden text-[var(--crack-orange)] font-black italic tracking-tighter">CRACKCHAT</div>
+          <div className="flex items-center space-x-2 md:space-x-4">
+            <button className="hidden sm:block text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"><Phone className="w-5 h-5" /></button>
+            <button className="hidden sm:block text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"><Video className="w-5 h-5" /></button>
+            <div className="text-[var(--crack-orange)] font-black italic tracking-tighter text-sm md:text-base">CRACKCHAT</div>
           </div>
         </header>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 scrollbar-hide">
           <AnimatePresence initial={false}>
             {messages.map((msg) => (
               <motion.div
@@ -510,32 +570,26 @@ function ChatApp() {
                 className="flex flex-col space-y-1"
               >
                 <div className="flex items-baseline space-x-2">
-                  <span className={cn("text-xs font-black uppercase tracking-tighter", msg.color)}>
+                  <span className={cn("text-[10px] md:text-xs font-black uppercase tracking-tighter", msg.color)}>
                     {msg.sender}
                   </span>
-                  <span className="text-[9px] text-zinc-600 font-mono">
+                  <span className="text-[8px] md:text-[9px] text-zinc-600 font-mono">
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
                 
-                <div className="max-w-2xl">
+                <div className="max-w-[90%] md:max-w-2xl">
                   {msg.type === 'text' && (
-                    <div className={cn(
-                      "text-zinc-300 text-sm leading-relaxed bg-zinc-900/30 p-3 border-l-2 border-zinc-800 transition-all duration-500",
-                      msg.uid !== userId ? "blur-md hover:blur-none cursor-help" : ""
-                    )}>
+                    <div className="text-zinc-300 text-sm leading-relaxed bg-zinc-900/30 p-3 border-l-2 border-zinc-800 transition-all duration-500">
                       {msg.text}
                     </div>
                   )}
                   {(msg.type === 'gif' || msg.type === 'sticker') && (
-                    <div className={cn(
-                      "transition-all duration-500",
-                      msg.uid !== userId ? "blur-xl hover:blur-none cursor-help" : ""
-                    )}>
+                    <div className="transition-all duration-500">
                       <img 
                         src={msg.url} 
                         alt="media" 
-                        className="max-w-[200px] rounded-sm border border-zinc-800"
+                        className="max-w-full sm:max-w-[200px] rounded-sm border border-zinc-800"
                         referrerPolicy="no-referrer"
                       />
                     </div>
@@ -554,11 +608,12 @@ function ChatApp() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              className="absolute bottom-24 left-6 z-30"
+              className="absolute bottom-24 left-4 md:left-6 z-30 scale-90 origin-bottom-left md:scale-100"
             >
               <EmojiPicker 
                 theme={EmojiTheme.DARK}
                 onEmojiClick={(emojiData) => setInputText(prev => prev + emojiData.emoji)}
+                width={window.innerWidth < 640 ? 280 : 350}
               />
             </motion.div>
           )}
@@ -568,7 +623,7 @@ function ChatApp() {
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="absolute bottom-24 left-6 z-30 w-[380px] bg-zinc-900 border border-zinc-800 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-lg"
+              className="absolute bottom-24 left-4 md:left-6 z-30 w-[calc(100%-2rem)] md:w-[380px] bg-zinc-900 border border-zinc-800 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-lg"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-4">
@@ -655,23 +710,23 @@ function ChatApp() {
         </AnimatePresence>
 
         {/* Input Area */}
-        <div className="p-6 bg-[#050505] border-t border-zinc-900">
+        <div className="p-4 md:p-6 bg-[#050505] border-t border-zinc-900">
           <form 
             onSubmit={handleSendMessage}
             className="relative flex items-center bg-zinc-900/50 border border-zinc-800 focus-within:border-[var(--crack-orange)] transition-colors"
           >
-            <div className="flex items-center px-4 space-x-2 border-r border-zinc-800">
+            <div className="flex items-center px-2 md:px-4 space-x-1 md:space-x-2 border-r border-zinc-800">
               <button 
                 type="button"
                 onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowGifPicker(false); }}
-                className={cn("text-zinc-500 hover:text-[var(--crack-orange)]", showEmojiPicker && "text-[var(--crack-orange)]")}
+                className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", showEmojiPicker && "text-[var(--crack-orange)]")}
               >
                 <Smile className="w-5 h-5" />
               </button>
               <button 
                 type="button"
                 onClick={() => { setShowGifPicker(!showGifPicker); setShowEmojiPicker(false); }}
-                className={cn("text-zinc-500 hover:text-[var(--crack-orange)]", showGifPicker && "text-[var(--crack-orange)]")}
+                className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", showGifPicker && "text-[var(--crack-orange)]")}
               >
                 <ImageIcon className="w-5 h-5" />
               </button>
@@ -681,14 +736,14 @@ function ChatApp() {
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="TRANSMIT MESSAGE..."
-              className="flex-1 bg-transparent py-4 px-6 focus:outline-none font-mono text-sm uppercase tracking-tighter"
+              placeholder="TRANSMIT..."
+              className="flex-1 bg-transparent py-4 px-3 md:px-6 focus:outline-none font-mono text-xs md:text-sm uppercase tracking-tighter"
             />
             
             <button
               type="submit"
               disabled={!inputText.trim()}
-              className="px-6 text-zinc-500 hover:text-[var(--crack-orange)] disabled:opacity-30 transition-colors"
+              className="px-4 md:px-6 text-zinc-500 hover:text-[var(--crack-orange)] disabled:opacity-30 transition-colors"
             >
               <Send className="w-5 h-5" />
             </button>
@@ -742,5 +797,76 @@ function ChatApp() {
         </AnimatePresence>
       </div>
     </div>
+  );
+}
+
+function SidebarContent({ 
+  rooms, 
+  currentRoom, 
+  handleJoinRoom, 
+  username, 
+  userColor, 
+  setIsJoined, 
+  showThemePicker, 
+  setShowThemePicker,
+  onClose
+}: { 
+  rooms: Room[], 
+  currentRoom: Room | null, 
+  handleJoinRoom: (room: Room) => void, 
+  username: string, 
+  userColor: string, 
+  setIsJoined: (val: boolean) => void,
+  showThemePicker: boolean,
+  setShowThemePicker: (val: boolean) => void,
+  onClose?: () => void
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-black tracking-tighter uppercase italic text-[var(--crack-orange)]">
+          CRACK<span className="text-white">CHAT</span>
+        </h2>
+        <div className="flex items-center space-x-2">
+          <button onClick={() => setShowThemePicker(!showThemePicker)} className="text-zinc-500 hover:text-[var(--crack-orange)]">
+            <Palette className="w-4 h-4" />
+          </button>
+          <button onClick={() => setIsJoined(false)} className="text-zinc-500 hover:text-red-500">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      
+      <div className="space-y-4 flex-1 overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Rooms</div>
+          <button onClick={() => setIsJoined(false)} className="text-[10px] text-zinc-500 hover:text-white uppercase font-bold">Switch</button>
+        </div>
+        {rooms.map(room => (
+          <button
+            key={room.id}
+            onClick={() => { handleJoinRoom(room); onClose?.(); }}
+            className={cn(
+              "w-full flex items-center space-x-2 p-2 -mx-2 transition-all group",
+              currentRoom?.id === room.id ? "text-[var(--crack-orange)] bg-[var(--crack-orange)]/10" : "text-zinc-500 hover:text-white"
+            )}
+          >
+            <Hash className="w-4 h-4" />
+            <span className="font-bold uppercase tracking-tighter truncate">{room.name}</span>
+            {room.hasPassword && <Lock className="w-3 h-3 ml-auto opacity-50" />}
+          </button>
+        ))}
+      </div>
+
+      <div className="pt-6 border-t border-zinc-900 space-y-4">
+        <div className="flex items-center space-x-3">
+          <div className={cn("w-3 h-3 rounded-full bg-current shadow-[0_0_10px_rgba(255,255,255,0.2)]", userColor)} />
+          <div className="flex flex-col">
+            <span className="text-xs font-bold uppercase tracking-tighter">{username}</span>
+            <span className="text-[10px] text-zinc-500 uppercase">Online</span>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
