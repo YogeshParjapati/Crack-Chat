@@ -61,7 +61,8 @@ service cloud.firestore {
              data.color is string &&
              data.type in ['text', 'emoji', 'gif', 'sticker'] &&
              data.timestamp is number &&
-             data.uid is string;
+             data.uid is string &&
+             (!('replyTo' in data) || (data.replyTo is map && data.replyTo.keys().hasAll(['text', 'sender'])));
     }
 
     function isValidPresence(data) {
@@ -88,6 +89,10 @@ service cloud.firestore {
       }
 
       match /presence/{presenceId} {
+        allow read, write: if true;
+      }
+
+      match /calls/{callId} {
         allow read, write: if true;
       }
     }

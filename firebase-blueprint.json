@@ -34,9 +34,29 @@
         "type": { "type": "string", "enum": ["text", "emoji", "gif", "sticker"], "description": "The type of message" },
         "url": { "type": "string", "description": "The URL for media messages" },
         "timestamp": { "type": "number", "description": "Timestamp of the message" },
-        "uid": { "type": "string", "description": "The sender's UID" }
+        "uid": { "type": "string", "description": "The sender's UID" },
+        "replyTo": {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string" },
+            "sender": { "type": "string" }
+          }
+        }
       },
       "required": ["text", "sender", "color", "type", "timestamp", "uid"]
+    },
+    "Call": {
+      "title": "Call",
+      "description": "A call signaling document",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["voice", "video"] },
+        "status": { "type": "string", "enum": ["calling", "active", "ended"] },
+        "callerId": { "type": "string" },
+        "callerName": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["type", "status", "callerId", "callerName"]
     }
   },
   "firestore": {
@@ -51,6 +71,10 @@
     "/rooms/{roomId}/presence": {
       "schema": "Presence",
       "description": "Collection of active users in a room"
+    },
+    "/rooms/{roomId}/calls": {
+      "schema": "Call",
+      "description": "Collection of active calls in a room"
     }
   }
 }

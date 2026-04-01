@@ -28,6 +28,10 @@ interface Message {
   type: 'text' | 'emoji' | 'gif' | 'sticker';
   url?: string;
   uid: string;
+  replyTo?: {
+    text: string;
+    sender: string;
+  };
 }
 
 interface Room {
@@ -142,6 +146,9 @@ function ChatApp() {
   const [gifs, setGifs] = useState<any[]>([]);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [isMediaLoading, setIsMediaLoading] = useState(false);
+  const [roomSearch, setRoomSearch] = useState('');
+  const [replyTo, setReplyTo] = useState<{ text: string; sender: string } | null>(null);
+  const [callState, setCallState] = useState<{ type: 'voice' | 'video'; status: 'calling' | 'incoming' | 'active'; peer?: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Rooms Listener & Cleanup
@@ -206,6 +213,30 @@ function ChatApp() {
 
     return () => unsubscribe();
   }, [currentRoom]);
+
+  // Call Listener
+  useEffect(() => {
+    if (!currentRoom || !isJoined) return;
+
+    const q = query(collection(db, `rooms/${currentRoom.id}/calls`), limit(1));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const callDoc = snapshot.docs[0];
+      if (callDoc) {
+        const data = callDoc.data();
+        if (data.callerId !== userId && data.status === 'calling') {
+          setCallState({ type: data.type, status: 'incoming', peer: data.callerName });
+        } else if (data.status === 'active') {
+          setCallState(prev => prev ? { ...prev, status: 'active' } : null);
+        } else if (data.status === 'ended') {
+          setCallState(null);
+        }
+      } else {
+        setCallState(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentRoom, isJoined, userId]);
 
   // Heartbeat for current room
   useEffect(() => {
@@ -303,17 +334,56 @@ function ChatApp() {
         type: customData?.type || 'text',
         url: customData?.url || null,
         timestamp: Date.now(),
-        uid: userId
+        uid: userId,
+        replyTo: replyTo || undefined
       };
 
       try {
         await addDoc(collection(db, `rooms/${currentRoom.id}/messages`), messageData);
         setInputText('');
+        setReplyTo(null);
         setShowEmojiPicker(false);
         setShowGifPicker(false);
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `rooms/${currentRoom.id}/messages`);
       }
+    }
+  };
+
+  const handleStartCall = async (type: 'voice' | 'video') => {
+    if (!currentRoom) return;
+    setCallState({ type, status: 'calling' });
+    try {
+      await setDoc(doc(db, `rooms/${currentRoom.id}/calls`, 'active'), {
+        type,
+        status: 'calling',
+        callerId: userId,
+        callerName: username,
+        timestamp: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Failed to start call", error);
+    }
+  };
+
+  const handleAcceptCall = async () => {
+    if (!currentRoom) return;
+    try {
+      await setDoc(doc(db, `rooms/${currentRoom.id}/calls`, 'active'), {
+        status: 'active'
+      }, { merge: true });
+    } catch (error) {
+      console.error("Failed to accept call", error);
+    }
+  };
+
+  const handleEndCall = async () => {
+    if (!currentRoom) return;
+    setCallState(null);
+    try {
+      await deleteDoc(doc(db, `rooms/${currentRoom.id}/calls`, 'active'));
+    } catch (error) {
+      console.error("Failed to end call", error);
     }
   };
 
@@ -415,6 +485,17 @@ function ChatApp() {
 
               {error && <p className="text-red-500 text-[10px] uppercase font-bold">{error}</p>}
 
+              <div className="relative mb-2">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
+                <input 
+                  type="text" 
+                  placeholder="SEARCH ROOMS..." 
+                  value={roomSearch}
+                  onChange={(e) => setRoomSearch(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 p-2 pl-7 text-[10px] focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase"
+                />
+              </div>
+
               {showRoomCreate ? (
                 <form onSubmit={handleCreateRoom} className="space-y-3 animate-in fade-in slide-in-from-top-2">
                   <input
@@ -438,7 +519,7 @@ function ChatApp() {
                 </form>
               ) : (
                 <div className="flex-1 overflow-y-auto max-h-[200px] space-y-2 pr-2">
-                  {rooms.map(room => (
+                  {rooms.filter(r => r.name.toLowerCase().includes(roomSearch.toLowerCase())).map(room => (
                     <div 
                       key={room.id}
                       className="group flex items-center justify-between bg-zinc-900/50 p-3 border border-zinc-800 hover:border-[var(--crack-orange)] transition-all cursor-pointer"
@@ -460,7 +541,7 @@ function ChatApp() {
                         )}
                         <button 
                           onClick={() => handleJoinRoom(room, joinPass)}
-                          className="text-[10px] font-black uppercase text-[var(--crack-orange)] opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="text-[10px] font-black uppercase text-[var(--crack-orange)] md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                         >
                           Join
                         </button>
@@ -499,6 +580,8 @@ function ChatApp() {
           setIsJoined={setIsJoined}
           showThemePicker={showThemePicker}
           setShowThemePicker={setShowThemePicker}
+          roomSearch={roomSearch}
+          setRoomSearch={setRoomSearch}
         />
       </div>
 
@@ -528,6 +611,8 @@ function ChatApp() {
                 setIsJoined={setIsJoined}
                 showThemePicker={showThemePicker}
                 setShowThemePicker={setShowThemePicker}
+                roomSearch={roomSearch}
+                setRoomSearch={setRoomSearch}
                 onClose={() => setShowMobileSidebar(false)}
               />
             </motion.div>
@@ -553,8 +638,18 @@ function ChatApp() {
           </div>
           
           <div className="flex items-center space-x-2 md:space-x-4">
-            <button className="hidden sm:block text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"><Phone className="w-5 h-5" /></button>
-            <button className="hidden sm:block text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"><Video className="w-5 h-5" /></button>
+            <button 
+              onClick={() => handleStartCall('voice')}
+              className="text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"
+            >
+              <Phone className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => handleStartCall('video')}
+              className="text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"
+            >
+              <Video className="w-5 h-5" />
+            </button>
             <div className="text-[var(--crack-orange)] font-black italic tracking-tighter text-sm md:text-base">CRACKCHAT</div>
           </div>
         </header>
@@ -567,8 +662,20 @@ function ChatApp() {
                 key={msg.id}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="flex flex-col space-y-1"
+                drag="x"
+                dragConstraints={{ left: 0, right: 100 }}
+                onDragEnd={(_, info) => {
+                  if (info.offset.x > 50) {
+                    setReplyTo({ text: msg.text, sender: msg.sender });
+                  }
+                }}
+                className="flex flex-col space-y-1 relative group"
               >
+                {msg.replyTo && (
+                  <div className="ml-2 pl-2 border-l-2 border-zinc-700 text-[10px] text-zinc-500 italic mb-1">
+                    Replying to <span className="font-bold">{msg.replyTo.sender}</span>: {msg.replyTo.text.substring(0, 30)}...
+                  </div>
+                )}
                 <div className="flex items-baseline space-x-2">
                   <span className={cn("text-[10px] md:text-xs font-black uppercase tracking-tighter", msg.color)}>
                     {msg.sender}
@@ -711,6 +818,16 @@ function ChatApp() {
 
         {/* Input Area */}
         <div className="p-4 md:p-6 bg-[#050505] border-t border-zinc-900">
+          {replyTo && (
+            <div className="flex items-center justify-between bg-zinc-900/80 p-2 mb-2 border-l-2 border-[var(--crack-orange)] animate-in slide-in-from-bottom-2">
+              <div className="text-[10px] text-zinc-400">
+                Replying to <span className="font-bold text-white">{replyTo.sender}</span>: {replyTo.text.substring(0, 50)}...
+              </div>
+              <button onClick={() => setReplyTo(null)} className="text-zinc-500 hover:text-white">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
           <form 
             onSubmit={handleSendMessage}
             className="relative flex items-center bg-zinc-900/50 border border-zinc-800 focus-within:border-[var(--crack-orange)] transition-colors"
@@ -758,6 +875,58 @@ function ChatApp() {
 
         {/* Theme Overlay */}
         <AnimatePresence>
+          {callState && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-6"
+            >
+              <div className="text-center space-y-8 max-w-sm w-full">
+                <div className="relative inline-block">
+                  <div className="w-32 h-32 rounded-full bg-zinc-800 flex items-center justify-center border-4 border-[var(--crack-orange)] animate-pulse">
+                    {callState.type === 'video' ? <Video className="w-12 h-12 text-[var(--crack-orange)]" /> : <Phone className="w-12 h-12 text-[var(--crack-orange)]" />}
+                  </div>
+                  {callState.status === 'active' && <div className="absolute -bottom-2 -right-2 bg-green-500 w-8 h-8 rounded-full border-4 border-black" />}
+                </div>
+                
+                <div className="space-y-2">
+                  <h3 className="text-3xl font-black uppercase tracking-tighter italic">
+                    {callState.status === 'calling' ? 'Transmitting...' : callState.status === 'incoming' ? 'Incoming Signal' : 'Link Established'}
+                  </h3>
+                  <p className="text-zinc-500 uppercase tracking-widest text-xs font-mono">
+                    {callState.status === 'incoming' ? `From: ${callState.peer}` : `Room: ${currentRoom?.name}`}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-center space-x-6">
+                  {callState.status === 'incoming' ? (
+                    <>
+                      <button 
+                        onClick={handleAcceptCall}
+                        className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center hover:scale-110 transition-transform shadow-[0_0_20px_rgba(34,197,94,0.4)]"
+                      >
+                        <Phone className="w-6 h-6 text-white" />
+                      </button>
+                      <button 
+                        onClick={handleEndCall}
+                        className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center hover:scale-110 transition-transform shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+                      >
+                        <X className="w-6 h-6 text-white" />
+                      </button>
+                    </>
+                  ) : (
+                    <button 
+                      onClick={handleEndCall}
+                      className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center hover:scale-110 transition-transform shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+                    >
+                      <X className="w-6 h-6 text-white" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
           {showThemePicker && (
             <motion.div 
               initial={{ opacity: 0 }}
@@ -809,6 +978,8 @@ function SidebarContent({
   setIsJoined, 
   showThemePicker, 
   setShowThemePicker,
+  roomSearch,
+  setRoomSearch,
   onClose
 }: { 
   rooms: Room[], 
@@ -819,6 +990,8 @@ function SidebarContent({
   setIsJoined: (val: boolean) => void,
   showThemePicker: boolean,
   setShowThemePicker: (val: boolean) => void,
+  roomSearch: string,
+  setRoomSearch: (val: string) => void,
   onClose?: () => void
 }) {
   return (
@@ -842,20 +1015,34 @@ function SidebarContent({
           <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Rooms</div>
           <button onClick={() => setIsJoined(false)} className="text-[10px] text-zinc-500 hover:text-white uppercase font-bold">Switch</button>
         </div>
-        {rooms.map(room => (
-          <button
-            key={room.id}
-            onClick={() => { handleJoinRoom(room); onClose?.(); }}
-            className={cn(
-              "w-full flex items-center space-x-2 p-2 -mx-2 transition-all group",
-              currentRoom?.id === room.id ? "text-[var(--crack-orange)] bg-[var(--crack-orange)]/10" : "text-zinc-500 hover:text-white"
-            )}
-          >
-            <Hash className="w-4 h-4" />
-            <span className="font-bold uppercase tracking-tighter truncate">{room.name}</span>
-            {room.hasPassword && <Lock className="w-3 h-3 ml-auto opacity-50" />}
-          </button>
-        ))}
+
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
+          <input 
+            type="text" 
+            placeholder="SEARCH..." 
+            value={roomSearch}
+            onChange={(e) => setRoomSearch(e.target.value)}
+            className="w-full bg-zinc-900 border border-zinc-800 p-2 pl-7 text-[10px] focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase"
+          />
+        </div>
+
+        <div className="space-y-1">
+          {rooms.filter(r => r.name.toLowerCase().includes(roomSearch.toLowerCase())).map(room => (
+            <button
+              key={room.id}
+              onClick={() => { handleJoinRoom(room); onClose?.(); }}
+              className={cn(
+                "w-full flex items-center space-x-2 p-2 -mx-2 transition-all group",
+                currentRoom?.id === room.id ? "text-[var(--crack-orange)] bg-[var(--crack-orange)]/10" : "text-zinc-500 hover:text-white"
+              )}
+            >
+              <Hash className="w-4 h-4" />
+              <span className="font-bold uppercase tracking-tighter truncate">{room.name}</span>
+              {room.hasPassword && <Lock className="w-3 h-3 ml-auto opacity-50" />}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="pt-6 border-t border-zinc-900 space-y-4">
