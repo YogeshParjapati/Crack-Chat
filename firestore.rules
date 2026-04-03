@@ -85,7 +85,7 @@ service cloud.firestore {
         allow read: if true;
         allow create: if true;
         allow update: if false;
-        allow delete: if false;
+        allow delete: if roomId == 'global' || isAdmin();
       }
 
       match /presence/{presenceId} {

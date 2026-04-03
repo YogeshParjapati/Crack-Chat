@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Hash, Shield, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
+
 import { cn } from '@/src/lib/utils';
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
 import { 
@@ -97,15 +98,12 @@ const COLORS = [
 ];
 
 const THEMES = [
-  { name: 'Dark Soul', class: 'theme-anime', color: '#ffffff', bgImage: 'https://images.unsplash.com/photo-1618336753974-aae8e04506aa?auto=format&fit=crop&q=80&w=1920' },
   { name: 'Classic Orange', class: '', color: '#f97316' },
   { name: 'Neon Green', class: 'theme-neon-green', color: '#22c55e' },
   { name: 'Cyber Pink', class: 'theme-cyber-pink', color: '#ec4899' },
   { name: 'Deep Blue', class: 'theme-deep-blue', color: '#3b82f6' },
-  { name: 'Night City', class: 'theme-anime', color: '#8b5cf6', bgImage: 'https://images.unsplash.com/photo-1578632738981-43c9ad4698d8?auto=format&fit=crop&q=80&w=1920' },
-  { name: 'Cherry Blossom', class: 'theme-anime', color: '#f472b6', bgImage: 'https://images.unsplash.com/photo-1522441815192-d9f04eb0615c?auto=format&fit=crop&q=80&w=1920' },
-  { name: 'Sunset Train', class: 'theme-anime', color: '#fb923c', bgImage: 'https://images.unsplash.com/photo-1541560052-5e137f229371?auto=format&fit=crop&q=80&w=1920' },
-  { name: 'Forest Shrine', class: 'theme-anime', color: '#4ade80', bgImage: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&q=80&w=1920' },
+  { name: 'Gold', class: 'theme-gold', color: '#eab308' },
+  { name: 'Blood Red', class: 'theme-blood-red', color: '#ef4444' },
 ];
 
 export default function App() {
@@ -149,6 +147,44 @@ function ChatApp() {
   const [roomSearch, setRoomSearch] = useState('');
   const [replyTo, setReplyTo] = useState<{ text: string; sender: string } | null>(null);
   const [callState, setCallState] = useState<{ type: 'voice' | 'video'; status: 'calling' | 'incoming' | 'active'; peer?: string } | null>(null);
+  const [onlineCount, setOnlineCount] = useState(1);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [adminPass, setAdminPass] = useState('');
+  const [allRoomsPresence, setAllRoomsPresence] = useState<any[]>([]);
+
+  // Admin Presence Listener
+  useEffect(() => {
+    if (!isAdmin) {
+      setAllRoomsPresence([]);
+      return;
+    }
+    
+    const unsubscribes: (() => void)[] = [];
+    
+    rooms.forEach(room => {
+      const q = query(collection(db, `rooms/${room.id}/presence`));
+      const unsub = onSnapshot(q, (snapshot) => {
+        const now = Date.now();
+        const members = snapshot.docs.map(doc => ({
+          ...doc.data(),
+          roomId: room.id,
+          roomName: room.name
+        })).filter((m: any) => m.lastSeen && (now - m.lastSeen < 60000));
+        
+        setAllRoomsPresence(prev => {
+          const others = prev.filter(p => p.roomId !== room.id);
+          return [...others, ...members];
+        });
+      }, (error) => {
+        console.error(`Admin presence listener error for room ${room.id}:`, error);
+      });
+      unsubscribes.push(unsub);
+    });
+    
+    return () => unsubscribes.forEach(u => u());
+  }, [isAdmin, rooms]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -259,6 +295,57 @@ function ChatApp() {
     return () => clearInterval(interval);
   }, [isJoined, currentRoom]);
 
+  // Presence Heartbeat & Listener
+  useEffect(() => {
+    if (!isJoined || !currentRoom || !userId) return;
+
+    const presenceRef = doc(db, `rooms/${currentRoom.id}/presence`, userId);
+    
+    const getDeviceInfo = () => {
+      const ua = navigator.userAgent;
+      if (/android/i.test(ua)) return "Android";
+      if (/iPad|iPhone|iPod/.test(ua)) return "iOS";
+      if (/Windows/i.test(ua)) return "Windows";
+      if (/Mac/i.test(ua)) return "Mac";
+      if (/Linux/i.test(ua)) return "Linux";
+      return "Unknown";
+    };
+
+    // 1. Initial presence update
+    setDoc(presenceRef, { 
+      userId, 
+      username, 
+      lastSeen: Date.now(),
+      device: getDeviceInfo()
+    }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, presenceRef.path));
+
+    // 2. Heartbeat every 20s
+    const heartbeat = setInterval(() => {
+      setDoc(presenceRef, { lastSeen: Date.now() }, { merge: true }).catch(() => {});
+    }, 20000);
+
+    // 3. Listener for online count
+    const q = query(collection(db, `rooms/${currentRoom.id}/presence`));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const now = Date.now();
+      const activeMembers = snapshot.docs.filter(doc => {
+        const data = doc.data();
+        // Active if seen in last 60 seconds
+        return data.lastSeen && (now - data.lastSeen < 60000);
+      });
+      setOnlineCount(activeMembers.length || 1);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `rooms/${currentRoom.id}/presence`);
+    });
+
+    return () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+      // Try to mark as offline on cleanup
+      deleteDoc(presenceRef).catch(() => {});
+    };
+  }, [isJoined, currentRoom, userId, username]);
+
   // Messages Listener
   useEffect(() => {
     if (!currentRoom) return;
@@ -292,7 +379,7 @@ function ChatApp() {
       return;
     }
 
-    if (room.hasPassword && room.password !== password) {
+    if (!isAdmin && room.hasPassword && room.password !== password) {
       setError('Incorrect password');
       return;
     }
@@ -454,31 +541,35 @@ function ChatApp() {
         {currentTheme.bgImage && (
           <div 
             className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
-            style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.4 }}
+            style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.15 }}
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/60 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/80 pointer-events-none" />
         
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-2xl w-full space-y-8 relative z-10"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-4xl w-full space-y-12 relative z-10"
         >
-          <div className="text-center space-y-2">
-            <h1 className="text-7xl font-black tracking-tighter uppercase italic text-[var(--crack-orange)]">
-              CRACK<span className="text-white">CHAT</span>
-            </h1>
-            <p className="text-zinc-500 text-sm uppercase tracking-widest font-mono">
-              The Void is Calling
+          <div className="text-center space-y-4">
+            <motion.h1 
+              initial={{ scale: 0.8, filter: 'blur(10px)' }}
+              animate={{ scale: 1, filter: 'blur(0px)' }}
+              className="text-8xl md:text-9xl font-black tracking-tighter uppercase italic text-white"
+            >
+              CRACK<span className="text-[var(--crack-orange)]">CHAT</span>
+            </motion.h1>
+            <p className="text-zinc-400 text-sm md:text-base uppercase tracking-[0.5em] font-mono animate-pulse">
+              A real-time chat platform
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className="grid md:grid-cols-2 gap-12">
             {/* Left: Identity */}
-            <div className="space-y-6 bg-zinc-900/30 p-6 border border-zinc-800">
-              <h2 className="text-xl font-black uppercase tracking-tighter border-b border-zinc-800 pb-2">Identity</h2>
+            <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/5 p-8 space-y-8 rounded-sm shadow-2xl">
+              <h2 className="text-2xl font-black uppercase tracking-tighter border-b border-white/10 pb-4">Identity</h2>
               
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
                   <input
@@ -486,100 +577,103 @@ function ChatApp() {
                     placeholder="CODENAME"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 py-4 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] transition-colors font-mono uppercase"
+                    className="w-full bg-black/50 border border-white/10 py-5 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase text-lg transition-all"
                   />
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <label className="text-[10px] text-zinc-500 uppercase font-bold">Select Vibe</label>
-                <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-4">
+                <label className="text-xs text-zinc-500 uppercase font-black tracking-widest">Select Vibe</label>
+                <div className="grid grid-cols-3 gap-3">
                   {THEMES.map(t => (
                     <button
                       key={t.name}
                       onClick={() => setCurrentTheme(t)}
                       className={cn(
-                        "h-8 border border-zinc-800 transition-all",
-                        currentTheme.name === t.name ? "border-[var(--crack-orange)] scale-105" : "opacity-50 hover:opacity-100"
+                        "h-10 border border-white/5 transition-all relative overflow-hidden group",
+                        currentTheme.name === t.name ? "border-white scale-105 shadow-[0_0_15px_rgba(255,255,255,0.2)]" : "opacity-40 hover:opacity-100"
                       )}
                       style={{ backgroundColor: t.color }}
-                    />
+                    >
+                      <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
                   ))}
                 </div>
               </div>
             </div>
 
             {/* Right: Rooms */}
-            <div className="space-y-4 bg-zinc-900/30 p-6 border border-zinc-800 flex flex-col">
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                <h2 className="text-xl font-black uppercase tracking-tighter">Rooms</h2>
+            <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/5 p-8 flex flex-col space-y-6 rounded-sm shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <h2 className="text-2xl font-black uppercase tracking-tighter">Rooms</h2>
                 <button 
                   onClick={() => setShowRoomCreate(!showRoomCreate)}
-                  className="text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"
+                  className="text-zinc-500 hover:text-white transition-all hover:scale-110"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-6 h-6" />
                 </button>
               </div>
 
-              {error && <p className="text-red-500 text-[10px] uppercase font-bold">{error}</p>}
+              {error && <p className="text-red-500 text-xs uppercase font-black animate-bounce">{error}</p>}
 
-              <div className="relative mb-2">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <input 
                   type="text" 
                   placeholder="SEARCH ROOMS..." 
                   value={roomSearch}
                   onChange={(e) => setRoomSearch(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 p-2 pl-7 text-[10px] focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase"
+                  className="w-full bg-black/50 border border-white/10 p-3 pl-10 text-xs focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
                 />
               </div>
 
               {showRoomCreate ? (
-                <form onSubmit={handleCreateRoom} className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                <form onSubmit={handleCreateRoom} className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
                   <input
                     type="text"
                     placeholder="ROOM NAME"
                     value={newRoomName}
                     onChange={(e) => setNewRoomName(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 p-3 text-sm focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase"
+                    className="w-full bg-black/50 border border-white/10 p-4 text-sm focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
                   />
                   <input
                     type="password"
                     placeholder="PASSWORD (OPTIONAL)"
                     value={newRoomPass}
                     onChange={(e) => setNewRoomPass(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 p-3 text-sm focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase"
+                    className="w-full bg-black/50 border border-white/10 p-4 text-sm focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
                   />
-                  <div className="flex gap-2">
-                    <button type="submit" className="flex-1 bg-[var(--crack-orange)] text-black font-black py-2 text-xs uppercase">Create</button>
-                    <button type="button" onClick={() => setShowRoomCreate(false)} className="px-4 border border-zinc-800 text-xs uppercase">Cancel</button>
+                  <div className="flex gap-3">
+                    <button type="submit" className="flex-1 bg-[var(--crack-orange)] text-black font-black uppercase py-3 text-sm hover:brightness-110 transition-all">Create</button>
+                    <button type="button" onClick={() => setShowRoomCreate(false)} className="px-6 border border-white/10 text-xs uppercase hover:bg-white/5 transition-colors">Cancel</button>
                   </div>
                 </form>
               ) : (
-                <div className="flex-1 overflow-y-auto max-h-[200px] space-y-2 pr-2">
+                <div className="flex-1 overflow-y-auto max-h-[250px] space-y-3 pr-2 scrollbar-hide">
                   {rooms.filter(r => r.name.toLowerCase().includes(roomSearch.toLowerCase())).map(room => (
                     <div 
                       key={room.id}
-                      className="group flex items-center justify-between bg-zinc-900/50 p-3 border border-zinc-800 hover:border-[var(--crack-orange)] transition-all cursor-pointer"
+                      onClick={() => !room.hasPassword && handleJoinRoom(room, '')}
+                      className="group flex items-center justify-between bg-white/5 p-4 border border-white/5 hover:border-white/20 hover:bg-white/10 transition-all cursor-pointer relative overflow-hidden"
                     >
-                      <div className="flex items-center space-x-2">
-                        <Hash className="w-4 h-4 text-zinc-600" />
-                        <span className="text-sm font-bold uppercase tracking-tighter">{room.name}</span>
-                        {room.hasPassword && <Lock className="w-3 h-3 text-zinc-600" />}
+                      <div className="flex items-center space-x-3 relative z-10">
+                        <Hash className="w-5 h-5 text-zinc-600 group-hover:text-white transition-colors" />
+                        <span className="text-base font-black uppercase tracking-tighter">{room.name}</span>
+                        {room.hasPassword && <Lock className="w-4 h-4 text-zinc-600" />}
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-3 relative z-10">
                         {room.hasPassword && (
                           <input 
                             type="password" 
                             placeholder="PASS" 
-                            className="w-16 bg-zinc-800 border border-zinc-700 text-[10px] p-1 focus:outline-none focus:border-[var(--crack-orange)]"
+                            className="w-20 bg-black/50 border border-white/10 text-[10px] p-2 focus:outline-none focus:border-[var(--crack-orange)] transition-all"
                             onChange={(e) => setJoinPass(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                           />
                         )}
                         <button 
-                          onClick={() => handleJoinRoom(room, joinPass)}
-                          className="text-[10px] font-black uppercase text-[var(--crack-orange)] md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => { e.stopPropagation(); handleJoinRoom(room, joinPass); }}
+                          className="text-xs font-black uppercase text-white md:opacity-0 md:group-hover:opacity-100 transition-all hover:scale-110"
                         >
                           Join
                         </button>
@@ -602,13 +696,13 @@ function ChatApp() {
       {currentTheme.bgImage && (
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
-          style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.25 }}
+          style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.1 }}
         />
       )}
-      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+      <div className="absolute inset-0 bg-black/60 pointer-events-none" />
 
       {/* Sidebar - Desktop */}
-      <div className="hidden md:flex w-64 border-r border-white/10 flex-col p-6 space-y-8 bg-black/40 backdrop-blur-xl relative z-10">
+      <div className="hidden md:flex w-64 border-r border-white/5 flex-col p-6 space-y-8 bg-black/40 backdrop-blur-2xl relative z-10">
         <SidebarContent 
           rooms={rooms} 
           currentRoom={currentRoom} 
@@ -661,34 +755,40 @@ function ChatApp() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col relative z-10 w-full overflow-hidden">
         {/* Header */}
-        <header className="h-16 border-b border-white/10 flex items-center justify-between px-4 md:px-6 bg-black/40 backdrop-blur-md z-20">
+        <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-6 bg-black/60 backdrop-blur-2xl z-20 shadow-lg">
           <div className="flex items-center space-x-3">
             <button 
               onClick={() => setShowMobileSidebar(true)}
-              className="md:hidden text-zinc-400 hover:text-white"
+              className="md:hidden text-zinc-400 hover:text-white transition-colors"
             >
               <Zap className="w-6 h-6" />
             </button>
             <div className="flex items-center space-x-2">
               <Hash className="w-5 h-5 text-zinc-500" />
-              <h3 className="font-black uppercase tracking-tighter truncate max-w-[120px] md:max-w-none">{currentRoom?.name}</h3>
+              <div className="flex flex-col">
+                <h3 className="font-black uppercase tracking-tighter truncate max-w-[120px] md:max-w-none leading-none">{currentRoom?.name}</h3>
+                <div className="flex items-center space-x-1 mt-0.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                  <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{onlineCount} ONLINE</span>
+                </div>
+              </div>
             </div>
           </div>
           
           <div className="flex items-center space-x-2 md:space-x-4">
             <button 
               onClick={() => handleStartCall('voice')}
-              className="text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"
+              className="text-zinc-500 hover:text-white transition-all hover:scale-110 active:scale-95"
             >
               <Phone className="w-5 h-5" />
             </button>
             <button 
               onClick={() => handleStartCall('video')}
-              className="text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"
+              className="text-zinc-500 hover:text-white transition-all hover:scale-110 active:scale-95"
             >
               <Video className="w-5 h-5" />
             </button>
-            <div className="text-[var(--crack-orange)] font-black italic tracking-tighter text-sm md:text-base">CRACKCHAT</div>
+            <div className="text-white font-black italic tracking-tighter text-sm md:text-base">CRACKCHAT</div>
           </div>
         </header>
 
@@ -707,10 +807,10 @@ function ChatApp() {
                     setReplyTo({ text: msg.text, sender: msg.sender });
                   }
                 }}
-                className="flex flex-col space-y-1 relative group"
+                className="flex flex-col space-y-1 relative group perspective-container"
               >
                 {msg.replyTo && (
-                  <div className="ml-2 pl-2 border-l-2 border-zinc-700 text-[10px] text-zinc-500 italic mb-1">
+                  <div className="ml-2 pl-2 border-l-2 border-white/10 text-[10px] text-zinc-500 italic mb-1">
                     Replying to <span className="font-bold">{msg.replyTo.sender}</span>: {msg.replyTo.text.substring(0, 30)}...
                   </div>
                 )}
@@ -725,7 +825,7 @@ function ChatApp() {
                 
                 <div className="max-w-[90%] md:max-w-2xl">
                   {msg.type === 'text' && (
-                    <div className="text-zinc-300 text-sm leading-relaxed bg-zinc-900/30 p-3 border-l-2 border-zinc-800 transition-all duration-500">
+                    <div className="text-zinc-300 text-sm leading-relaxed bg-white/5 backdrop-blur-sm p-4 border-l-2 border-white/20 transition-all duration-500 hover:bg-white/10 hover:translate-x-1 shadow-xl">
                       {msg.text}
                     </div>
                   )}
@@ -734,7 +834,7 @@ function ChatApp() {
                       <img 
                         src={msg.url} 
                         alt="media" 
-                        className="max-w-full sm:max-w-[300px] rounded-sm border border-zinc-800 shadow-lg"
+                        className="max-w-full sm:max-w-[300px] rounded-sm border border-white/10 shadow-2xl"
                         referrerPolicy="no-referrer"
                       />
                     </div>
@@ -744,7 +844,7 @@ function ChatApp() {
                       <video 
                         src={msg.url} 
                         controls
-                        className="max-w-full sm:max-w-[300px] rounded-sm border border-zinc-800 shadow-lg"
+                        className="max-w-full sm:max-w-[300px] rounded-sm border border-white/10 shadow-2xl"
                       />
                     </div>
                   )}
@@ -877,9 +977,9 @@ function ChatApp() {
           )}
           <form 
             onSubmit={handleSendMessage}
-            className="relative flex items-center bg-zinc-900/50 border border-zinc-800 focus-within:border-[var(--crack-orange)] transition-colors"
+            className="relative flex items-center bg-black/60 backdrop-blur-2xl border border-white/5 focus-within:border-white transition-all duration-500 shadow-2xl"
           >
-            <div className="flex items-center px-2 md:px-4 space-x-1 md:space-x-2 border-r border-zinc-800">
+            <div className="flex items-center px-2 md:px-4 space-x-1 md:space-x-2 border-r border-white/5">
               <button 
                 type="button"
                 onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowGifPicker(false); }}
@@ -1016,10 +1116,10 @@ function ChatApp() {
                         currentTheme.name === t.name && "bg-zinc-800 border-[var(--crack-orange)]"
                       )}
                     >
-                      {t.bgImage && (
+                      {'bgImage' in t && t.bgImage && (
                         <div 
                           className="absolute inset-0 bg-cover bg-center opacity-30"
-                          style={{ backgroundImage: `url(${t.bgImage})` }}
+                          style={{ backgroundImage: `url(${(t as any).bgImage})` }}
                         />
                       )}
                       <div className="w-8 h-8 rounded-full relative z-10" style={{ backgroundColor: t.color }} />
@@ -1028,6 +1128,124 @@ function ChatApp() {
                   ))}
                 </div>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* SVG Filter for Gooey Effect */}
+        <svg className="hidden">
+          <defs>
+            <filter id="gooey">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+              <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo" />
+              <feBlend in="SourceGraphic" in2="goo" />
+            </filter>
+          </defs>
+        </svg>
+
+        {/* Admin Panel Toggle */}
+        <div className="fixed right-4 top-1/2 -translate-y-1/2 z-[60] flex flex-col items-center space-y-4">
+          <button 
+            onClick={() => setShowAdminPanel(!showAdminPanel)}
+            className={cn(
+              "w-10 h-10 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center transition-all shadow-2xl group",
+              isAdmin ? "text-[var(--crack-orange)] border-[var(--crack-orange)]" : "text-zinc-500 hover:text-white"
+            )}
+          >
+            <Shield className="w-5 h-5" />
+            <span className="absolute right-12 bg-black/80 px-2 py-1 text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-white/10 whitespace-nowrap">Admin Panel</span>
+          </button>
+        </div>
+
+        {/* Admin Panel Overlay */}
+        <AnimatePresence>
+          {showAdminPanel && (
+            <motion.div 
+              initial={{ x: 400 }}
+              animate={{ x: 0 }}
+              exit={{ x: 400 }}
+              className="fixed right-0 top-0 bottom-0 w-80 bg-zinc-950 border-l border-white/10 z-[70] p-6 flex flex-col shadow-2xl backdrop-blur-xl"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col">
+                  <h2 className="text-xl font-black uppercase tracking-tighter italic">Admin Panel</h2>
+                  {isAdmin && <span className="text-[8px] text-[var(--crack-orange)] font-bold uppercase tracking-[0.2em]">Full Access Mode</span>}
+                </div>
+                <button onClick={() => setShowAdminPanel(false)} className="text-zinc-500 hover:text-white transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {!isAdmin ? (
+                <div className="space-y-6">
+                  <div className="p-4 bg-white/5 border border-white/5 rounded-sm">
+                    <p className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest mb-4">Authentication Required</p>
+                    <div className="space-y-3">
+                      <input 
+                        type="password" 
+                        placeholder="ADMIN PASSWORD"
+                        value={adminPass}
+                        onChange={(e) => setAdminPass(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 p-3 text-xs focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
+                      />
+                      <button 
+                        onClick={() => {
+                          if (adminPass === 'admin123') {
+                            setIsAdmin(true);
+                            setAdminPass('');
+                          } else {
+                            setError('Invalid Admin Credentials');
+                          }
+                        }}
+                        className="w-full bg-[var(--crack-orange)] text-black font-black uppercase py-3 text-xs hover:brightness-110 transition-all active:scale-95"
+                      >
+                        Login
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col min-h-0">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Active Members ({allRoomsPresence.length})</span>
+                    <button onClick={() => setIsAdmin(false)} className="text-[10px] text-red-500 hover:text-red-400 uppercase font-bold transition-colors">Logout</button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-hide">
+                    {allRoomsPresence.length === 0 ? (
+                      <div className="text-center py-12 text-zinc-600">
+                        <Users className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                        <p className="text-[10px] uppercase font-bold">No active users</p>
+                      </div>
+                    ) : (
+                      allRoomsPresence.map((member, idx) => (
+                        <div key={`${member.roomId}-${member.userId}-${idx}`} className="p-3 bg-white/5 border border-white/5 space-y-2 group hover:border-white/10 transition-all">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black uppercase tracking-tighter text-white">{member.username}</span>
+                            <span className="text-[8px] px-1.5 py-0.5 bg-white/10 text-zinc-400 rounded-full font-bold uppercase">{member.device}</span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-[9px] text-zinc-500">
+                            <Hash className="w-3 h-3" />
+                            <span className="uppercase font-bold tracking-widest truncate">{member.roomName}</span>
+                          </div>
+                          <div className="flex items-center space-x-1">
+                            <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
+                            <span className="text-[8px] text-zinc-600 uppercase font-bold">Active Now</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="mt-6 pt-6 border-t border-white/5">
+                    <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest mb-3">Quick Actions</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button className="p-2 bg-white/5 border border-white/5 text-[9px] font-black uppercase hover:bg-white/10 transition-all">Broadcast</button>
+                      <button className="p-2 bg-white/5 border border-white/5 text-[9px] font-black uppercase hover:bg-white/10 transition-all">Log Audit</button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1064,23 +1282,23 @@ function SidebarContent({
   return (
     <>
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-black tracking-tighter uppercase italic text-[var(--crack-orange)]">
-          CRACK<span className="text-white">CHAT</span>
+        <h2 className="text-2xl font-black tracking-tighter uppercase italic text-white">
+          CRACK<span className="text-[var(--crack-orange)]">CHAT</span>
         </h2>
         <div className="flex items-center space-x-2">
-          <button onClick={() => setShowThemePicker(!showThemePicker)} className="text-zinc-500 hover:text-[var(--crack-orange)]">
+          <button onClick={() => setShowThemePicker(!showThemePicker)} className="text-zinc-500 hover:text-white transition-colors">
             <Palette className="w-4 h-4" />
           </button>
-          <button onClick={() => setIsJoined(false)} className="text-zinc-500 hover:text-red-500">
+          <button onClick={() => setIsJoined(false)} className="text-zinc-500 hover:text-red-500 transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
       
-      <div className="space-y-4 flex-1 overflow-y-auto">
+      <div className="space-y-4 flex-1 overflow-y-auto scrollbar-hide">
         <div className="flex items-center justify-between">
-          <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Rooms</div>
-          <button onClick={() => setIsJoined(false)} className="text-[10px] text-zinc-500 hover:text-white uppercase font-bold">Switch</button>
+          <div className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Active Rooms</div>
+          <button onClick={() => setIsJoined(false)} className="text-[10px] text-zinc-500 hover:text-white uppercase font-black transition-colors">Switch</button>
         </div>
 
         <div className="relative">
@@ -1090,7 +1308,7 @@ function SidebarContent({
             placeholder="SEARCH..." 
             value={roomSearch}
             onChange={(e) => setRoomSearch(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 p-2 pl-7 text-[10px] focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase"
+            className="w-full bg-black/50 border border-white/10 p-2 pl-7 text-[10px] focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
           />
         </div>
 
@@ -1100,24 +1318,28 @@ function SidebarContent({
               key={room.id}
               onClick={() => { handleJoinRoom(room); onClose?.(); }}
               className={cn(
-                "w-full flex items-center space-x-2 p-2 -mx-2 transition-all group",
-                currentRoom?.id === room.id ? "text-[var(--crack-orange)] bg-[var(--crack-orange)]/10" : "text-zinc-500 hover:text-white"
+                "w-full flex items-center space-x-2 p-2 -mx-2 transition-all group relative overflow-hidden",
+                currentRoom?.id === room.id ? "text-white bg-white/10" : "text-zinc-500 hover:text-white hover:bg-white/5"
               )}
             >
               <Hash className="w-4 h-4" />
-              <span className="font-bold uppercase tracking-tighter truncate">{room.name}</span>
+              <span className="font-black uppercase tracking-tighter truncate">{room.name}</span>
               {room.hasPassword && <Lock className="w-3 h-3 ml-auto opacity-50" />}
+              {currentRoom?.id === room.id && <div className="absolute left-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_white]" />}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="pt-6 border-t border-zinc-900 space-y-4">
+      <div className="pt-6 border-t border-white/5 space-y-4">
         <div className="flex items-center space-x-3">
-          <div className={cn("w-3 h-3 rounded-full bg-current shadow-[0_0_10px_rgba(255,255,255,0.2)]", userColor)} />
+          <div className={cn("w-3 h-3 rounded-full bg-current shadow-[0_0_15px_currentColor]", userColor)} />
           <div className="flex flex-col">
-            <span className="text-xs font-bold uppercase tracking-tighter">{username}</span>
-            <span className="text-[10px] text-zinc-500 uppercase">Online</span>
+            <span className="text-xs font-black uppercase tracking-tighter">{username}</span>
+            <div className="flex items-center space-x-1">
+              <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[9px] text-zinc-500 uppercase font-bold">Connected</span>
+            </div>
           </div>
         </div>
       </div>
