@@ -203,6 +203,117 @@ function ChatApp() {
   const [allRoomsPresence, setAllRoomsPresence] = useState<any[]>([]);
   const [adminActiveTab, setAdminActiveTab] = useState<'members' | 'rooms'>('members');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isScreenMasked, setIsScreenMasked] = useState(false);
+  const [screenshotSuccess, setScreenshotSuccess] = useState<string | null>(null);
+
+  const captureDiagnosticScreenshot = async () => {
+    try {
+      const el = document.getElementById('crackchat-main-terminal');
+      if (!el) return;
+      
+      const html2canvas = (await import('html2canvas')).default;
+      
+      const canvas = await html2canvas(el, {
+        backgroundColor: '#000000',
+        useCORS: true,
+        allowTaint: true,
+        scale: 2
+      });
+      
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = `crackchat-secure-capture-${Date.now()}.png`;
+        link.href = url;
+        link.click();
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+
+      setScreenshotSuccess("SCREEN CAPTURE SAVED.");
+      setTimeout(() => setScreenshotSuccess(null), 3500);
+    } catch (err) {
+      console.error(err);
+      alert('Screen Capture Diagnostic Failure.');
+    }
+  };
+
+  // Screenshot Prevention: Keyboard Intercepts & custom behaviors for non-admins
+  useEffect(() => {
+    if (isAdmin) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      
+      if (e.key === 'PrintScreen' || e.keyCode === 44) {
+        e.preventDefault();
+        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nScreenshots are strictly prohibited on this interface.');
+        return false;
+      }
+      
+      if ((e.ctrlKey || (isMac && e.metaKey)) && e.key === 'p') {
+        e.preventDefault();
+        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nDocument printing is restricted for this terminal.');
+        return false;
+      }
+
+      if ((e.ctrlKey || (isMac && e.metaKey)) && e.key === 's') {
+        e.preventDefault();
+        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nOffline page compiling is restricted.');
+        return false;
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      // Allow general action inputs, context menus are disabled specifically for images/messages
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'IMG' || target.closest('.no-print-non-admin') || target.tagName === 'SPAN' || target.tagName === 'P')) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('contextmenu', handleContextMenu, true);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('contextmenu', handleContextMenu, true);
+    };
+  }, [isAdmin]);
+
+  // Window Focus & Document Visibility Observer
+  useEffect(() => {
+    if (isAdmin) {
+      setIsScreenMasked(false);
+      return;
+    }
+
+    const handleBlur = () => {
+      setIsScreenMasked(true);
+    };
+
+    const handleFocus = () => {
+      setIsScreenMasked(false);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsScreenMasked(true);
+      } else {
+        setIsScreenMasked(false);
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isAdmin]);
 
   // Firebase Auth
   useEffect(() => {
@@ -992,8 +1103,57 @@ function ChatApp() {
 
   return (
     <div 
+      id="crackchat-main-terminal"
       className={cn("flex h-screen bg-[var(--crack-bg)] text-white font-sans overflow-hidden transition-all duration-700 relative", currentTheme.class)}
     >
+      {!isAdmin && (
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media print {
+            body { display: none !important; }
+            #crackchat-main-terminal { display: none !important; }
+            * { display: none !important; }
+          }
+          * {
+            -webkit-user-select: none !important;
+            -moz-user-select: none !important;
+            -ms-user-select: none !important;
+            user-select: none !important;
+          }
+        `}} />
+      )}
+
+      <AnimatePresence>
+        {isScreenMasked && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/95 z-[9999] flex flex-col items-center justify-center p-6 text-center select-none backdrop-blur-xl"
+          >
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff02_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
+            <div className="p-8 border border-red-500/30 bg-black/80 max-w-md w-full rounded-sm relative overflow-hidden">
+              {/* Corner indicators */}
+              <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-red-500" />
+              <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-red-500" />
+              <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-red-500" />
+              <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-red-500" />
+
+              <AlertTriangle className="w-12 h-12 text-red-500 animate-pulse mx-auto mb-4" />
+              <h2 className="text-lg font-black tracking-widest text-red-500 uppercase font-mono mb-2">SHIELD ENCRYPTED</h2>
+              <p className="text-[10px] text-zinc-400 font-mono uppercase tracking-wider leading-relaxed px-2">
+                This channel content is encrypted. Screens/snips are strictly prohibited. Focus out detected. Return focus to resume workspace safely.
+              </p>
+              
+              <div className="mt-6 flex justify-center">
+                <span className="text-[8px] px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 font-bold uppercase tracking-[0.2em] animate-pulse">
+                  anti_screenshot_active
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {currentTheme.bgImage && (
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
@@ -1104,6 +1264,19 @@ function ChatApp() {
                 <Trash2 className="w-5 h-5" />
               </button>
             )}
+            
+            {isAdmin ? (
+              <span className="hidden sm:inline-flex items-center space-x-1 text-[8px] bg-[var(--crack-orange)]/10 text-[var(--crack-orange)] px-2 py-1 rounded-sm border border-[var(--crack-orange)]/20 font-mono font-bold tracking-widest uppercase">
+                <Shield className="w-2.5 h-2.5 animate-pulse" />
+                <span>CAPTR_OK</span>
+              </span>
+            ) : (
+              <span className="hidden sm:inline-flex items-center space-x-1 text-[8px] bg-red-500/10 text-red-500 px-2 py-1 rounded-sm border border-red-500/20 font-mono font-bold tracking-widest uppercase animate-pulse">
+                <Lock className="w-2.5 h-2.5" />
+                <span>SHIELD_ON</span>
+              </span>
+            )}
+
             <div className="text-white font-black italic tracking-tighter text-sm md:text-base hidden min-[380px]:block">CRACKCHAT</div>
           </div>
         </header>
@@ -1687,9 +1860,20 @@ function ChatApp() {
                   <div className="mt-6 pt-6 border-t border-white/5">
                     <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest mb-3">Quick Actions</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <button className="p-2 bg-white/5 border border-white/5 text-[9px] font-black uppercase hover:bg-white/10 transition-all">Broadcast</button>
+                      <button 
+                        onClick={captureDiagnosticScreenshot}
+                        className="p-2 bg-[var(--crack-orange)] text-black border border-[var(--crack-orange)] text-[9px] font-black uppercase hover:brightness-110 transition-all flex items-center justify-center space-x-1"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span>SCREENSHOT SYS</span>
+                      </button>
                       <button className="p-2 bg-white/5 border border-white/5 text-[9px] font-black uppercase hover:bg-white/10 transition-all">Log Audit</button>
                     </div>
+                    {screenshotSuccess && (
+                      <p className="text-[8px] text-green-500 uppercase font-mono tracking-widest mt-2.5 text-center animate-pulse">
+                        {screenshotSuccess}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
