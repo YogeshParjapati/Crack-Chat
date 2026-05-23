@@ -8,26 +8,120 @@
 :root {
   --crack-orange: #f97316;
   --crack-bg: #050505;
-  --crack-surface: #18181b;
+  --crack-surface: #121214;
+  --crack-border: rgba(255, 255, 255, 0.05);
 }
 
 .theme-neon-green {
   --crack-orange: #22c55e;
+  --crack-bg: #000000;
+  --crack-surface: #0a0e0a;
+  --crack-border: rgba(34, 197, 94, 0.1);
 }
 
 .theme-cyber-pink {
   --crack-orange: #ec4899;
+  --crack-bg: #0d0614;
+  --crack-surface: #1c0e2a;
+  --crack-border: rgba(236, 72, 153, 0.12);
 }
 
 .theme-deep-blue {
   --crack-orange: #3b82f6;
+  --crack-bg: #030c1e;
+  --crack-surface: #0c1834;
+  --crack-border: rgba(59, 130, 246, 0.15);
 }
 
 .theme-gold {
   --crack-orange: #eab308;
+  --crack-bg: #0a0907;
+  --crack-surface: #1b1710;
+  --crack-border: rgba(234, 179, 8, 0.1);
 }
 
 .theme-blood-red {
   --crack-orange: #ef4444;
+  --crack-bg: #070101;
+  --crack-surface: #170404;
+  --crack-border: rgba(239, 68, 68, 0.1);
 }
+
+.theme-acid-purple {
+  --crack-orange: #a855f7;
+  --crack-bg: #070311;
+  --crack-surface: #140b28;
+  --crack-border: rgba(168, 85, 247, 0.12);
+}
+
+.theme-ice-synth {
+  --crack-orange: #06b6d4;
+  --crack-bg: #050d14;
+  --crack-surface: #0e1c28;
+  --crack-border: rgba(6, 182, 212, 0.15);
+}
+
+.theme-toxic-hazard {
+  --crack-orange: #84cc16;
+  --crack-bg: #060803;
+  --crack-surface: #141b0d;
+  --crack-border: rgba(132, 204, 22, 0.12);
+}
+
+.theme-sunset-vibe {
+  --crack-orange: #ff6b6b;
+  --crack-bg: #140d1a;
+  --crack-surface: #24162f;
+  --crack-border: rgba(255, 107, 107, 0.12);
+}
+
+.theme-minimalist-silver {
+  --crack-orange: #f4f4f5;
+  --crack-bg: #000000;
+  --crack-surface: #0f0f11;
+  --crack-border: rgba(244, 244, 245, 0.1);
+}
+
+.theme-sakura-blossom {
+  --crack-orange: #f43f5e;
+  --crack-bg: #0f0509;
+  --crack-surface: #220c15;
+  --crack-border: rgba(244, 63, 94, 0.12);
+}
+
+.theme-anime-neon-tokyo {
+  --crack-orange: #d946ef;
+  --crack-bg: #080313;
+  --crack-surface: #150a2a;
+  --crack-border: rgba(217, 70, 239, 0.2);
+}
+
+.theme-anime-lofi-station {
+  --crack-orange: #f97316;
+  --crack-bg: #150a04;
+  --crack-surface: #251308;
+  --crack-border: rgba(249, 115, 22, 0.16);
+}
+
+.theme-anime-skyline {
+  --crack-orange: #38bdf8;
+  --crack-bg: #050b1d;
+  --crack-surface: #0e1735;
+  --crack-border: rgba(56, 189, 248, 0.2);
+}
+
+.theme-anime-retro-arcade {
+  --crack-orange: #06b6d4;
+  --crack-bg: #040108;
+  --crack-surface: #120524;
+  --crack-border: rgba(6, 182, 212, 0.2);
+}
+
+.theme-anime-bamboo-forest {
+  --crack-orange: #10b981;
+  --crack-bg: #040c08;
+  --crack-surface: #0e2015;
+  --crack-border: rgba(16, 185, 129, 0.18);
+}
+
 

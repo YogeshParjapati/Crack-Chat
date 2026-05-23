@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2 } from 'lucide-react';
+import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 
 import { cn } from '@/src/lib/utils';
@@ -14,11 +14,13 @@ import {
   doc, 
   setDoc, 
   getDoc,
+  getDocs,
   getDocFromServer,
   limit,
   deleteDoc
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
+import { db, auth } from './firebase';
 
 interface Message {
   id: string;
@@ -74,15 +76,21 @@ interface FirestoreErrorInfo {
 }
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const user = auth.currentUser;
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: 'unauthenticated',
-      email: null,
-      emailVerified: false,
-      isAnonymous: true,
-      tenantId: null,
-      providerInfo: []
+      userId: user?.uid || 'unauthenticated',
+      email: user?.email || null,
+      emailVerified: user?.emailVerified || false,
+      isAnonymous: user?.isAnonymous || false,
+      tenantId: user?.tenantId || null,
+      providerInfo: user?.providerData.map(p => ({
+        providerId: p.providerId,
+        displayName: p.displayName,
+        email: p.email,
+        photoUrl: p.photoURL
+      })) || []
     },
     operationType,
     path
@@ -98,12 +106,23 @@ const COLORS = [
 ];
 
 const THEMES = [
-  { name: 'Classic Orange', class: '', color: '#f97316' },
-  { name: 'Neon Green', class: 'theme-neon-green', color: '#22c55e' },
-  { name: 'Cyber Pink', class: 'theme-cyber-pink', color: '#ec4899' },
-  { name: 'Deep Blue', class: 'theme-deep-blue', color: '#3b82f6' },
-  { name: 'Gold', class: 'theme-gold', color: '#eab308' },
-  { name: 'Blood Red', class: 'theme-blood-red', color: '#ef4444' },
+  { name: 'Classic Orange', class: '', color: '#f97316', vibe: 'HACKER / CLASSIC' },
+  { name: 'Neon Green', class: 'theme-neon-green', color: '#22c55e', vibe: 'MATRIX TERMINAL' },
+  { name: 'Cyber Pink', class: 'theme-cyber-pink', color: '#ec4899', vibe: 'VAPORWAVE / RETRO' },
+  { name: 'Deep Blue', class: 'theme-deep-blue', color: '#3b82f6', vibe: 'SAPPHIRE OCEAN' },
+  { name: 'Gold', class: 'theme-gold', color: '#eab308', vibe: 'LUXURY VELVET' },
+  { name: 'Blood Red', class: 'theme-blood-red', color: '#ef4444', vibe: 'OMINOUS / CARNAGE' },
+  { name: 'Acid Purple', class: 'theme-acid-purple', color: '#a855f7', vibe: 'PLUM SYNTH' },
+  { name: 'Ice Synth', class: 'theme-ice-synth', color: '#06b6d4', vibe: 'GLACIAL FROST' },
+  { name: 'Toxic Hazard', class: 'theme-toxic-hazard', color: '#84cc16', vibe: 'INDUSTRIAL WASTE' },
+  { name: 'Sunset Vibe', class: 'theme-sunset-vibe', color: '#ff6b6b', vibe: 'CORAL HORIZON' },
+  { name: 'Minimalist Silver', class: 'theme-minimalist-silver', color: '#f4f4f5', vibe: 'SPECTRE VOID' },
+  { name: 'Sakura Sunset 🎏', class: 'theme-sakura-blossom', color: '#f43f5e', vibe: 'SAKURA SHINKAI', bgImage: 'https://images.unsplash.com/photo-1542332213-9b5a5a3abd90?q=80&w=1920&auto=format&fit=crop' },
+  { name: 'Neon Shinjuku 🌸', class: 'theme-anime-neon-tokyo', color: '#d946ef', vibe: 'CYBERPUNK TOKYO', bgImage: 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?q=80&w=1920&auto=format&fit=crop' },
+  { name: 'Lofi Train Cabin 🎧', class: 'theme-anime-lofi-station', color: '#f97316', vibe: 'LOFI EVENING', bgImage: 'https://images.unsplash.com/photo-1515621061946-eff1c2a352bd?q=80&w=1920&auto=format&fit=crop' },
+  { name: 'Starlight Dream ✨', class: 'theme-anime-skyline', color: '#38bdf8', vibe: 'CELESTIAL VOID', bgImage: 'https://images.unsplash.com/photo-1475274047050-1d0c0975c63e?q=80&w=1920&auto=format&fit=crop' },
+  { name: 'Retro Arcade 👾', class: 'theme-anime-retro-arcade', color: '#06b6d4', vibe: 'PIXEL SYNTHWAVE', bgImage: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?q=80&w=1920&auto=format&fit=crop' },
+  { name: 'Ghibli Valley 🎋', class: 'theme-anime-bamboo-forest', color: '#10b981', vibe: 'SUMMER CHILL', bgImage: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1920&auto=format&fit=crop' },
 ];
 
 export default function App() {
@@ -113,14 +132,7 @@ export default function App() {
 }
 
 function ChatApp() {
-  const [userId] = useState(() => {
-    let id = localStorage.getItem('crackchat_userid');
-    if (!id) {
-      id = Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('crackchat_userid', id);
-    }
-    return id;
-  });
+  const [userId, setUserId] = useState(() => localStorage.getItem('crackchat_userid') || '');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [username, setUsername] = useState(localStorage.getItem('crackchat_username') || '');
@@ -139,7 +151,14 @@ function ChatApp() {
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [isStickerMode, setIsStickerMode] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState(THEMES[0]);
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    const saved = localStorage.getItem('crackchat_theme');
+    return THEMES.find(t => t.name === saved) || THEMES[0];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('crackchat_theme', currentTheme.name);
+  }, [currentTheme]);
   const [gifSearch, setGifSearch] = useState('');
   const [gifs, setGifs] = useState<any[]>([]);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
@@ -150,8 +169,63 @@ function ChatApp() {
   const [onlineCount, setOnlineCount] = useState(1);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [adminPass, setAdminPass] = useState('');
   const [allRoomsPresence, setAllRoomsPresence] = useState<any[]>([]);
+  const [adminActiveTab, setAdminActiveTab] = useState<'members' | 'rooms'>('members');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  // Firebase Auth
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserId(user.uid);
+        localStorage.setItem('crackchat_userid', user.uid);
+        // Auto-admin if email matches
+        if (user.email === 'yy2561171@gmail.com') {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } else {
+        // We don't auto-login anonymously anymore because it's restricted
+        setUserId(localStorage.getItem('crackchat_userid') || '');
+        setIsAdmin(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    if (isAuthenticating) return;
+    setIsAuthenticating(true);
+    setError('');
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (err: any) {
+      console.error("Google Sign-In Error:", err);
+      const errorCode = err?.code;
+      if (errorCode === 'auth/cancelled-popup-request') {
+        console.warn("Benign: Google Sign-in popup request was cancelled.");
+      } else if (errorCode === 'auth/popup-closed-by-user') {
+        console.info("Info: User closed the sign-in popup.");
+      } else if (errorCode === 'auth/popup-blocked') {
+        setError("Sign-in popup blocked. Please allow popups for this site.");
+      } else {
+        setError("Failed to sign in with Google.");
+      }
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setIsAdmin(false);
+    } catch (err) {
+      console.error("Sign-Out Error:", err);
+    }
+  };
 
   // Admin Presence Listener
   useEffect(() => {
@@ -419,6 +493,46 @@ function ChatApp() {
     }
   };
 
+  const handleClearChat = async () => {
+    if (!currentRoom || !isAdmin) return;
+    
+    if (!window.confirm(`Are you sure you want to clear all messages in ${currentRoom.name}? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const q = query(collection(db, `rooms/${currentRoom.id}/messages`));
+      const snapshot = await getDocs(q);
+      
+      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      
+      await addDoc(collection(db, `rooms/${currentRoom.id}/messages`), {
+        text: `Chat cleared by admin`,
+        sender: 'SYSTEM',
+        color: 'text-red-500',
+        type: 'text',
+        timestamp: Date.now(),
+        uid: 'system'
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `rooms/${currentRoom.id}/messages`);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!currentRoom) return;
+    
+    // Only admins or the message sender (though we'll focus on admin for now as per user request context)
+    // Actually, let's allow admins to delete anything, and users to delete their own.
+    
+    try {
+      await deleteDoc(doc(db, `rooms/${currentRoom.id}/messages`, messageId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `rooms/${currentRoom.id}/messages/${messageId}`);
+    }
+  };
+
   const handleSendMessage = async (e?: React.FormEvent, customData?: Partial<Message>) => {
     e?.preventDefault();
     if ((inputText.trim() || customData) && isJoined && currentRoom) {
@@ -537,7 +651,7 @@ function ChatApp() {
 
   if (!isJoined) {
     return (
-      <div className={cn("min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-4 font-sans transition-all duration-700 relative overflow-hidden", currentTheme.class)}>
+      <div className={cn("min-h-screen bg-[var(--crack-bg)] text-white flex flex-col items-center justify-center p-4 font-sans transition-all duration-700 relative overflow-hidden", currentTheme.class)}>
         {currentTheme.bgImage && (
           <div 
             className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
@@ -583,19 +697,33 @@ function ChatApp() {
               </div>
               
               <div className="space-y-4">
-                <label className="text-xs text-zinc-500 uppercase font-black tracking-widest">Select Vibe</label>
-                <div className="grid grid-cols-3 gap-3">
+                <label className="text-xs text-zinc-400 uppercase font-black tracking-widest">Select Vibe</label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[195px] overflow-y-auto pr-1 scrollbar-thin">
                   {THEMES.map(t => (
                     <button
                       key={t.name}
+                      type="button"
                       onClick={() => setCurrentTheme(t)}
                       className={cn(
-                        "h-10 border border-white/5 transition-all relative overflow-hidden group",
-                        currentTheme.name === t.name ? "border-white scale-105 shadow-[0_0_15px_rgba(255,255,255,0.2)]" : "opacity-40 hover:opacity-100"
+                        "flex items-center space-x-2 p-2.5 border transition-all text-left bg-black/40 hover:bg-black/20 group cursor-pointer relative overflow-hidden",
+                        currentTheme.name === t.name ? "border-white scale-[1.02] bg-white/5 shadow-[0_0_15px_rgba(255,255,255,0.05)]" : "border-white/5 opacity-60 hover:opacity-100"
                       )}
-                      style={{ backgroundColor: t.color }}
+                      style={{ 
+                        borderColor: currentTheme.name === t.name ? t.color : 'rgba(255,255,255,0.05)',
+                        boxShadow: currentTheme.name === t.name ? `0 0 10px ${t.color}22` : 'none'
+                      }}
                     >
-                      <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      {t.bgImage && (
+                        <div 
+                          className="absolute inset-0 bg-cover bg-center opacity-[0.06] group-hover:opacity-15 transition-opacity pointer-events-none"
+                          style={{ backgroundImage: `url(${t.bgImage})` }}
+                        />
+                      )}
+                      <div className="w-3 h-3 rounded-full flex-shrink-0 transition-transform group-hover:scale-110 relative z-10" style={{ backgroundColor: t.color, boxShadow: `0 0 10px ${t.color}88` }} />
+                      <div className="flex flex-col min-w-0 relative z-10">
+                        <span className="text-[10px] font-black uppercase tracking-tighter truncate text-white">{t.name}</span>
+                        <span className="text-[7.5px] font-mono tracking-widest uppercase truncate text-zinc-500 group-hover:text-zinc-400 transition-colors">{t.vibe}</span>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -691,7 +819,7 @@ function ChatApp() {
 
   return (
     <div 
-      className={cn("flex h-screen bg-[#050505] text-white font-sans overflow-hidden transition-all duration-700 relative", currentTheme.class)}
+      className={cn("flex h-screen bg-[var(--crack-bg)] text-white font-sans overflow-hidden transition-all duration-700 relative", currentTheme.class)}
     >
       {currentTheme.bgImage && (
         <div 
@@ -714,6 +842,9 @@ function ChatApp() {
           setShowThemePicker={setShowThemePicker}
           roomSearch={roomSearch}
           setRoomSearch={setRoomSearch}
+          onGoogleSignIn={handleGoogleSignIn}
+          onSignOut={handleSignOut}
+          isAuthenticating={isAuthenticating}
         />
       </div>
 
@@ -732,7 +863,7 @@ function ChatApp() {
               initial={{ x: -300 }}
               animate={{ x: 0 }}
               exit={{ x: -300 }}
-              className="fixed inset-y-0 left-0 w-72 bg-[#050505] border-r border-white/10 z-50 p-6 flex flex-col space-y-8 md:hidden"
+              className="fixed inset-y-0 left-0 w-72 bg-[var(--crack-bg)] border-r border-white/10 z-50 p-6 flex flex-col space-y-8 md:hidden"
             >
               <SidebarContent 
                 rooms={rooms} 
@@ -746,6 +877,9 @@ function ChatApp() {
                 roomSearch={roomSearch}
                 setRoomSearch={setRoomSearch}
                 onClose={() => setShowMobileSidebar(false)}
+                onGoogleSignIn={handleGoogleSignIn}
+                onSignOut={handleSignOut}
+                isAuthenticating={isAuthenticating}
               />
             </motion.div>
           </>
@@ -788,6 +922,15 @@ function ChatApp() {
             >
               <Video className="w-5 h-5" />
             </button>
+            {isAdmin && currentRoom?.id === 'global' && (
+              <button 
+                onClick={handleClearChat}
+                className="text-zinc-500 hover:text-red-500 transition-all hover:scale-110 active:scale-95"
+                title="Clear Chat"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            )}
             <div className="text-white font-black italic tracking-tighter text-sm md:text-base">CRACKCHAT</div>
           </div>
         </header>
@@ -821,6 +964,15 @@ function ChatApp() {
                   <span className="text-[8px] md:text-[9px] text-zinc-600 font-mono">
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
+                  {(isAdmin || msg.uid === userId) && (
+                    <button 
+                      onClick={() => handleDeleteMessage(msg.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-red-500"
+                      title="Delete Message"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
                 
                 <div className="max-w-[90%] md:max-w-2xl">
@@ -964,7 +1116,7 @@ function ChatApp() {
         </AnimatePresence>
 
         {/* Input Area */}
-        <div className="p-4 md:p-6 bg-[#050505] border-t border-zinc-900">
+        <div className="p-4 md:p-6 bg-[var(--crack-bg)] border-t border-zinc-900">
           {replyTo && (
             <div className="flex items-center justify-between bg-zinc-900/80 p-2 mb-2 border-l-2 border-[var(--crack-orange)] animate-in slide-in-from-bottom-2">
               <div className="text-[10px] text-zinc-400">
@@ -1099,31 +1251,62 @@ function ChatApp() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6"
+              className="absolute inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4"
             >
-              <div className="bg-zinc-900 border border-zinc-800 p-8 max-w-md w-full space-y-6">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-2xl font-black uppercase tracking-tighter italic">Select Vibe</h3>
-                  <button onClick={() => setShowThemePicker(false)}><X className="w-6 h-6" /></button>
+              <div className="bg-[var(--crack-surface)] border border-white/5 p-6 md:p-8 max-w-xl w-full space-y-6 rounded-md shadow-2xl relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-tr from-[var(--crack-orange)]/5 via-transparent to-transparent pointer-events-none" />
+                
+                <div className="flex items-center justify-between relative z-10">
+                  <div>
+                    <h3 className="text-2xl font-black uppercase tracking-tighter italic text-white flex items-center space-x-2">
+                      <Palette className="w-6 h-6 text-[var(--crack-orange)]" />
+                      <span>THEME ATMOSPHERES</span>
+                    </h3>
+                    <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 mt-1">Modulate visual wavelengths</p>
+                  </div>
+                  <button 
+                    onClick={() => setShowThemePicker(false)}
+                    className="p-1.5 hover:bg-white/5 text-zinc-500 hover:text-white transition-all rounded"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                
+                <div className="grid grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1 scrollbar-thin relative z-10">
                   {THEMES.map(t => (
                     <button
                       key={t.name}
                       onClick={() => { setCurrentTheme(t); setShowThemePicker(false); }}
                       className={cn(
-                        "p-4 border border-zinc-800 flex flex-col items-center space-y-2 transition-all hover:border-[var(--crack-orange)] relative overflow-hidden",
-                        currentTheme.name === t.name && "bg-zinc-800 border-[var(--crack-orange)]"
+                        "p-3.5 border flex flex-col items-start space-y-2.5 transition-all relative overflow-hidden text-left group bg-black/40 hover:bg-black/20 hover:scale-[1.01] cursor-pointer",
+                        currentTheme.name === t.name ? "bg-white/5 border-white" : "border-white/5 opacity-70 hover:opacity-100"
                       )}
+                      style={{ 
+                        borderColor: currentTheme.name === t.name ? t.color : 'rgba(255,255,255,0.05)',
+                        boxShadow: currentTheme.name === t.name ? `0 0 15px ${t.color}22` : 'none'
+                      }}
                     >
-                      {'bgImage' in t && t.bgImage && (
+                      {t.bgImage && (
                         <div 
-                          className="absolute inset-0 bg-cover bg-center opacity-30"
-                          style={{ backgroundImage: `url(${(t as any).bgImage})` }}
+                          className="absolute inset-0 bg-cover bg-center opacity-[0.08] group-hover:opacity-20 transition-opacity pointer-events-none"
+                          style={{ backgroundImage: `url(${t.bgImage})` }}
                         />
                       )}
-                      <div className="w-8 h-8 rounded-full relative z-10" style={{ backgroundColor: t.color }} />
-                      <span className="text-[10px] font-bold uppercase tracking-widest relative z-10">{t.name}</span>
+                      <div className="flex items-center justify-between w-full relative z-10">
+                        <div className="w-3.5 h-3.5 rounded-full flex-shrink-0 transition-transform group-hover:scale-110" style={{ backgroundColor: t.color, boxShadow: `0 0 10px ${t.color}` }} />
+                        <span className="text-[7.5px] font-mono tracking-widest text-[var(--crack-orange)] group-hover:text-white transition-colors opacity-80 uppercase">{t.vibe}</span>
+                      </div>
+                      
+                      <div className="min-w-0 relative z-10">
+                        <span className="text-xs font-black uppercase tracking-tighter text-white block truncate">{t.name}</span>
+                      </div>
+
+                      {/* Visual swatch indicator strip */}
+                      <div className="flex space-x-1 w-full pt-1.5 relative z-10">
+                        <div className="w-full h-1 bg-[#050505] rounded-l border border-white/5" title="Background Base" />
+                        <div className="w-full h-1 bg-[#121214] border border-white/5" title="Surface Level" />
+                        <div className="w-full h-1 rounded-r" style={{ backgroundColor: t.color }} title="Accent Flare" />
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -1177,63 +1360,153 @@ function ChatApp() {
               </div>
 
               {!isAdmin ? (
-                <div className="space-y-6">
-                  <div className="p-4 bg-white/5 border border-white/5 rounded-sm">
-                    <p className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest mb-4">Authentication Required</p>
-                    <div className="space-y-3">
-                      <input 
-                        type="password" 
-                        placeholder="ADMIN PASSWORD"
-                        value={adminPass}
-                        onChange={(e) => setAdminPass(e.target.value)}
-                        className="w-full bg-black/50 border border-white/10 p-3 text-xs focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
-                      />
-                      <button 
-                        onClick={() => {
-                          if (adminPass === 'admin123') {
-                            setIsAdmin(true);
-                            setAdminPass('');
-                          } else {
-                            setError('Invalid Admin Credentials');
-                          }
-                        }}
-                        className="w-full bg-[var(--crack-orange)] text-black font-black uppercase py-3 text-xs hover:brightness-110 transition-all active:scale-95"
-                      >
-                        Login
-                      </button>
-                    </div>
-                  </div>
+                <div className="space-y-6 flex-1 flex flex-col justify-center items-center text-center p-4">
+                  <AlertTriangle className="w-12 h-12 text-[#ef4444] animate-pulse mb-2" />
+                  <h3 className="text-sm font-black uppercase tracking-widest text-[#ef4444]">Access Restricted</h3>
+                  <p className="text-xs text-zinc-500 leading-relaxed max-w-xs mt-2 font-black tracking-tight">
+                    This admin console is strictly reserved for Google account <span className="text-white font-mono break-all font-bold">yy2561171@gmail.com</span>. No other credentials, accounts, or emails are permitted.
+                  </p>
+                  {!auth.currentUser ? (
+                    <button 
+                      onClick={handleGoogleSignIn}
+                      disabled={isAuthenticating}
+                      className={cn(
+                        "mt-6 w-full bg-white text-black font-black uppercase py-3 text-xs tracking-widest hover:bg-zinc-200 transition-all flex items-center justify-center space-x-2",
+                        isAuthenticating && "opacity-50 pointer-events-none"
+                      )}
+                    >
+                      {isAuthenticating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-[var(--crack-orange)]" />
+                          <span>Authenticating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4 fill-current text-[var(--crack-orange)]" />
+                          <span>Authenticate</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <p className="mt-4 text-[10px] text-zinc-500 font-mono">
+                      Currently signed in as: <br />
+                      <span className="text-zinc-400 break-all">{auth.currentUser.email}</span>
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col min-h-0">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Active Members ({allRoomsPresence.length})</span>
-                    <button onClick={() => setIsAdmin(false)} className="text-[10px] text-red-500 hover:text-red-400 uppercase font-bold transition-colors">Logout</button>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[9px] text-[#ef4444] uppercase font-black tracking-widest font-mono">SYS_ADMIN_CONSOLE</span>
+                    <button onClick={() => setIsAdmin(false)} className="text-[10px] text-zinc-500 hover:text-red-500 uppercase font-bold transition-colors">Logout</button>
+                  </div>
+
+                  {/* Admin Glass Tabs */}
+                  <div className="grid grid-cols-2 gap-1 mb-4 p-1 bg-white/5 border border-white/5 text-[10px] uppercase font-black font-mono">
+                    <button 
+                      onClick={() => setAdminActiveTab('members')}
+                      className={cn(
+                        "py-2 text-center transition-all",
+                        adminActiveTab === 'members' ? "bg-[var(--crack-orange)] text-black font-black" : "text-zinc-500 hover:text-white"
+                      )}
+                    >
+                      USERS ({allRoomsPresence.length})
+                    </button>
+                    <button 
+                      onClick={() => setAdminActiveTab('rooms')}
+                      className={cn(
+                        "py-2 text-center transition-all",
+                        adminActiveTab === 'rooms' ? "bg-[var(--crack-orange)] text-black font-black" : "text-zinc-500 hover:text-white"
+                      )}
+                    >
+                      ROOMS ({rooms.length})
+                    </button>
                   </div>
                   
-                  <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-hide">
-                    {allRoomsPresence.length === 0 ? (
-                      <div className="text-center py-12 text-zinc-600">
-                        <Users className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                        <p className="text-[10px] uppercase font-bold">No active users</p>
-                      </div>
-                    ) : (
-                      allRoomsPresence.map((member, idx) => (
-                        <div key={`${member.roomId}-${member.userId}-${idx}`} className="p-3 bg-white/5 border border-white/5 space-y-2 group hover:border-white/10 transition-all">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-black uppercase tracking-tighter text-white">{member.username}</span>
-                            <span className="text-[8px] px-1.5 py-0.5 bg-white/10 text-zinc-400 rounded-full font-bold uppercase">{member.device}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-[9px] text-zinc-500">
-                            <Hash className="w-3 h-3" />
-                            <span className="uppercase font-bold tracking-widest truncate">{member.roomName}</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-[8px] text-zinc-600 uppercase font-bold">Active Now</span>
-                          </div>
+                  <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-hide">
+                    {adminActiveTab === 'members' ? (
+                      allRoomsPresence.length === 0 ? (
+                        <div className="text-center py-12 text-zinc-600">
+                          <Users className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                          <p className="text-[10px] uppercase font-bold">No active users</p>
                         </div>
-                      ))
+                      ) : (
+                        allRoomsPresence.map((member, idx) => {
+                          const targetRoom = rooms.find(r => r.id === member.roomId);
+                          return (
+                            <div key={`${member.roomId}-${member.userId}-${idx}`} className="p-3 bg-white/5 border border-white/5 space-y-2 group hover:border-white/10 transition-all">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-black uppercase tracking-tighter text-white">{member.username}</span>
+                                <span className="text-[8px] px-1.5 py-0.5 bg-white/10 text-zinc-400 rounded-full font-bold uppercase">{member.device}</span>
+                              </div>
+                              <div className="flex items-center space-x-2 text-[9px] text-zinc-500">
+                                <Hash className="w-3 h-3" />
+                                <span className="uppercase font-bold tracking-widest truncate">{member.roomName}</span>
+                              </div>
+                              <div className="flex items-center space-x-1 justify-between">
+                                <div className="flex items-center space-x-1">
+                                  <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
+                                  <span className="text-[8px] text-zinc-600 uppercase font-bold">Active Now</span>
+                                </div>
+                              </div>
+                              
+                              {targetRoom && (
+                                <button
+                                  onClick={() => {
+                                    handleJoinRoom(targetRoom);
+                                    setShowAdminPanel(false);
+                                  }}
+                                  className="w-full mt-2 py-1.5 bg-white/10 hover:bg-[var(--crack-orange)] text-white hover:text-black font-black font-mono uppercase text-[9px] tracking-widest transition-all flex items-center justify-center space-x-1 border border-white/5"
+                                >
+                                  <Unlock className="w-2.5 h-2.5" />
+                                  <span>JOIN USER ROOM</span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )
+                    ) : (
+                      rooms.length === 0 ? (
+                        <div className="text-center py-12 text-zinc-600">
+                          <Hash className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                          <p className="text-[10px] uppercase font-bold">No rooms found</p>
+                        </div>
+                      ) : (
+                        rooms.map((room) => (
+                          <div key={room.id} className="p-3 bg-white/5 border border-white/5 space-y-2 hover:border-[var(--crack-orange)] transition-all flex flex-col justify-between">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center space-x-2">
+                                <Hash className="w-4 h-4 text-[var(--crack-orange)]" />
+                                <span className="text-xs font-black uppercase tracking-tighter text-white truncate max-w-[120px]">{room.name}</span>
+                              </div>
+                              {room.hasPassword ? (
+                                <span className="text-[8px] bg-red-500/10 text-red-500 px-1.5 py-0.5 font-bold font-mono tracking-widest uppercase">LOCKED</span>
+                              ) : (
+                                <span className="text-[8px] bg-green-500/10 text-green-500 px-1.5 py-0.5 font-bold font-mono tracking-widest uppercase font-black">OPEN</span>
+                              )}
+                            </div>
+                            
+                            {room.hasPassword && (
+                              <div className="text-[9px] text-zinc-500 font-mono tracking-tight flex items-center space-x-1 bg-black/40 p-1 rounded border border-white/5">
+                                <span className="text-zinc-600 uppercase font-black text-[7px]">CLEAR PWD:</span>
+                                <span className="text-[var(--crack-orange)] font-bold font-mono break-all seleccionar-texto">{room.password || "Empty"}</span>
+                              </div>
+                            )}
+                            
+                            <button
+                              onClick={() => {
+                                handleJoinRoom(room);
+                                setShowAdminPanel(false);
+                              }}
+                              className="w-full mt-2 py-1.5 bg-white text-black hover:bg-[var(--crack-orange)] hover:text-black font-black font-mono uppercase text-[9px] tracking-widest transition-all flex items-center justify-center space-x-1"
+                            >
+                              <Unlock className="w-3 h-3" />
+                              <span>BYPASS & JOIN</span>
+                            </button>
+                          </div>
+                        ))
+                      )
                     )}
                   </div>
 
@@ -1265,7 +1538,10 @@ function SidebarContent({
   setShowThemePicker,
   roomSearch,
   setRoomSearch,
-  onClose
+  onClose,
+  onGoogleSignIn,
+  onSignOut,
+  isAuthenticating
 }: { 
   rooms: Room[], 
   currentRoom: Room | null, 
@@ -1277,8 +1553,13 @@ function SidebarContent({
   setShowThemePicker: (val: boolean) => void,
   roomSearch: string,
   setRoomSearch: (val: string) => void,
-  onClose?: () => void
+  onClose?: () => void,
+  onGoogleSignIn: () => void,
+  onSignOut: () => void,
+  isAuthenticating?: boolean
 }) {
+  const user = auth.currentUser;
+
   return (
     <>
       <div className="flex items-center justify-between">
@@ -1296,6 +1577,43 @@ function SidebarContent({
       </div>
       
       <div className="space-y-4 flex-1 overflow-y-auto scrollbar-hide">
+        {!user ? (
+          <button 
+            onClick={onGoogleSignIn}
+            disabled={isAuthenticating}
+            className={cn(
+              "w-full bg-white text-black font-black uppercase py-2 text-[10px] tracking-widest hover:bg-zinc-200 transition-all flex items-center justify-center space-x-2",
+              isAuthenticating && "opacity-50 pointer-events-none"
+            )}
+          >
+            {isAuthenticating ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin text-[var(--crack-orange)]" />
+                <span>Authenticating...</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-3 h-3 fill-current" />
+                <span>Sign In with Google</span>
+              </>
+            )}
+          </button>
+        ) : (
+          <div className="p-3 bg-white/5 border border-white/10 rounded-sm space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[8px] text-zinc-500 uppercase font-black tracking-widest">Authenticated</span>
+              <button onClick={onSignOut} className="text-[8px] text-red-500 hover:text-red-400 uppercase font-black">Sign Out</button>
+            </div>
+            <div className="flex items-center space-x-2">
+              <img src={user.photoURL || ''} alt="" className="w-5 h-5 rounded-full border border-white/10" referrerPolicy="no-referrer" />
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] font-bold text-white truncate">{user.displayName}</span>
+                <span className="text-[8px] text-zinc-500 truncate">{user.email}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <div className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Active Rooms</div>
           <button onClick={() => setIsJoined(false)} className="text-[10px] text-zinc-500 hover:text-white uppercase font-black transition-colors">Switch</button>

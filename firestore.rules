@@ -79,13 +79,13 @@ service cloud.firestore {
       allow read: if true;
       allow create: if true;
       allow update: if true;
-      allow delete: if resource.data.get('permanent', false) == false;
+      allow delete: if isAdmin() || resource.data.get('permanent', false) == false;
 
       match /messages/{messageId} {
         allow read: if true;
         allow create: if true;
         allow update: if false;
-        allow delete: if roomId == 'global' || isAdmin();
+        allow delete: if isAdmin() || isDocOwner();
       }
 
       match /presence/{presenceId} {
