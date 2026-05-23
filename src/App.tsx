@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2 } from 'lucide-react';
+import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2, Terminal, Cpu, Layers, Wifi } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 
 import { cn } from '@/src/lib/utils';
@@ -131,7 +131,38 @@ export default function App() {
   );
 }
 
+const BOOT_LOG_LINES = [
+  "SYS_PORTAL: SPARKING NETWORK ADAPTOR...",
+  "RESOLVING FIREBASE INTERMEDIARY PEER CHANNEL...",
+  "ESTABLISHING HOSTING SIGNALS FOR ADOPTED REALM...",
+  "DIAGNOSING ATOMIC FREQUENCIES...",
+  "MODULATING SENSORY COLOR GRID...",
+  "LOADING CORE ASSETS...",
+  "INITIALIZATION SUCCESSFUL. HOST SECURED."
+];
+
 function ChatApp() {
+  const [isBooting, setIsBooting] = useState(true);
+  const [bootLogIndex, setBootLogIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isBooting) return;
+    const interval = setInterval(() => {
+      setBootLogIndex((prev) => {
+        if (prev >= BOOT_LOG_LINES.length - 1) {
+          clearInterval(interval);
+          const timeout = setTimeout(() => {
+            setIsBooting(false);
+          }, 800);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 280);
+
+    return () => clearInterval(interval);
+  }, [isBooting]);
+
   const [userId, setUserId] = useState(() => localStorage.getItem('crackchat_userid') || '');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -648,6 +679,148 @@ function ChatApp() {
       searchGifs(true);
     }
   }, [showGifPicker, isStickerMode]);
+
+  if (isBooting) {
+    const progressPercent = Math.min(100, Math.round(((bootLogIndex + 1) / BOOT_LOG_LINES.length) * 100));
+
+    return (
+      <div className={cn("min-h-screen bg-[var(--crack-bg)] text-white flex flex-col items-center justify-center p-6 font-sans transition-all duration-700 relative overflow-hidden select-none", currentTheme.class)}>
+        {/* Subtle grid pattern background overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+        
+        {/* Horizontal scan line animation */}
+        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[var(--crack-orange)] to-transparent opacity-30 shadow-[0_0_10px_var(--crack-orange)] animate-scanline pointer-events-none" style={{ animation: 'scanline linear infinite 6s' }} />
+
+        {currentTheme.bgImage && (
+          <div 
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
+            style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.08 }}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/40 to-black/90 pointer-events-none" />
+
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 1.05 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="max-w-xl w-full relative z-10 space-y-8"
+        >
+          {/* High-tech Console Frame */}
+          <div className="bg-black/80 border border-white/5 p-6 md:p-8 rounded-sm shadow-2xl relative overflow-hidden backdrop-blur-md">
+            {/* Ambient neon corner accent lines */}
+            <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2" style={{ borderColor: 'var(--crack-orange)' }} />
+            <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2" style={{ borderColor: 'var(--crack-orange)' }} />
+            <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2" style={{ borderColor: 'var(--crack-orange)' }} />
+            <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2" style={{ borderColor: 'var(--crack-orange)' }} />
+
+            {/* Frame Header indicators */}
+            <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
+              <div className="flex items-center space-x-2">
+                <Terminal className="w-4 h-4 animate-pulse" style={{ color: 'var(--crack-orange)' }} />
+                <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-black font-semibold">SYS_INITIALIZATION_MODULE_v3.5</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping" />
+                <span className="text-[8px] font-mono tracking-widest text-green-500 font-extrabold uppercase">LINK_ESTABLISHED</span>
+              </div>
+            </div>
+
+            {/* Central Loader Node */}
+            <div className="flex flex-col items-center justify-center py-6 space-y-4">
+              <div className="relative flex items-center justify-center w-20 h-20">
+                {/* External rotating gear/dots */}
+                <motion.div 
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
+                  className="absolute inset-0 rounded-full border border-dashed border-white/20"
+                />
+                
+                {/* Mid track ring */}
+                <div className="absolute w-16 h-16 rounded-full border border-white/5" />
+
+                {/* Pulsing Core */}
+                <motion.div 
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                  className="w-12 h-12 rounded-full flex items-center justify-center relative bg-black border"
+                  style={{ borderColor: 'var(--crack-orange)', boxShadow: `0 0 15px var(--crack-orange)44` }}
+                >
+                  <Cpu className="w-5 h-5" style={{ color: 'var(--crack-orange)' }} />
+                </motion.div>
+                
+                <span className="absolute -bottom-3 text-[9px] font-mono text-zinc-400 uppercase font-black bg-black px-1">
+                  CORE_U_LNK
+                </span>
+              </div>
+
+              <div className="text-center pt-2">
+                <h3 className="text-xl font-black uppercase tracking-widest font-mono italic">
+                  CRACK<span style={{ color: 'var(--crack-orange)' }}>CHAT</span>
+                </h3>
+                <span className="text-[8px] font-mono tracking-[0.4em] uppercase text-zinc-500 block">REALTIME MATRIX CORE</span>
+              </div>
+            </div>
+
+            {/* System Log Console Terminal */}
+            <div className="bg-black/60 border border-white/5 p-4 rounded-sm font-mono text-[10px] space-y-1.5 text-left h-[135px] overflow-y-auto scrollbar-hide mb-6 relative">
+              <div className="absolute top-2 right-2 flex items-center space-x-1.5 opacity-60 pointer-events-none">
+                <Wifi className="w-3 h-3 text-zinc-500" />
+                <span className="text-[8.5px] text-zinc-500 font-bold uppercase">PING: 14MS</span>
+              </div>
+
+              {BOOT_LOG_LINES.slice(0, bootLogIndex + 1).map((line, idx) => (
+                <div key={idx} className="flex items-start space-x-2 animate-in fade-in slide-in-from-left-2 duration-200">
+                  <span style={{ color: 'var(--crack-orange)' }} className="font-extrabold select-none">&gt;&gt;</span>
+                  <p className="flex-1 text-zinc-300 break-all leading-relaxed tracking-wider uppercase font-medium">
+                    {line}
+                  </p>
+                  {idx === bootLogIndex && (
+                    <motion.span 
+                      animate={{ opacity: [1, 0, 1] }} 
+                      transition={{ repeat: Infinity, duration: 0.8 }}
+                      className="w-1.5 h-3 bg-white inline-block flex-shrink-0"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Technical Progress Loading Bar */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between font-mono text-[9px] font-black text-zinc-400 uppercase">
+                <span className="tracking-widest">BOOTING CHANNELS</span>
+                <span style={{ color: 'var(--crack-orange)' }} className="font-bold">{progressPercent}%</span>
+              </div>
+              <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden relative border border-white/5">
+                <motion.div 
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{ 
+                    width: `${progressPercent}%`, 
+                    backgroundColor: 'var(--crack-orange)', 
+                    boxShadow: `0 0 10px var(--crack-orange)` 
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Action Trigger / Skip Button with extra cyber styling */}
+          <div className="flex flex-col items-center justify-center space-y-3">
+            <button 
+              onClick={() => setIsBooting(false)}
+              className="group flex items-center space-x-2 text-[9px] text-zinc-500 hover:text-white font-mono uppercase tracking-[0.3em] transition-all bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 px-5 py-2.5 rounded-sm"
+            >
+              <span>[[ BYPASS INITIALIZATION ]]</span>
+            </button>
+            <p className="text-[7.5px] font-mono text-zinc-600 uppercase tracking-widest">
+              SECURE CHAT PROTOCOLS ACTIVE &middot; EST. 2026
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (!isJoined) {
     return (

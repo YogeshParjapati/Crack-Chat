@@ -124,4 +124,13 @@
   --crack-border: rgba(16, 185, 129, 0.18);
 }
 
+@keyframes scanline {
+  0% {
+    top: -10px;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
 
