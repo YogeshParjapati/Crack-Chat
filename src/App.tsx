@@ -245,43 +245,81 @@ function ChatApp() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       
+      // Prevent PrintScreen key - Trigger instantaneous masking shield first
       if (e.key === 'PrintScreen' || e.keyCode === 44) {
         e.preventDefault();
-        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nScreenshots are strictly prohibited on this interface.');
+        setIsScreenMasked(true);
+        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nScreenshots are strictly prohibited on this secure terminal.');
+        setTimeout(() => setIsScreenMasked(false), 3000);
         return false;
       }
       
+      // Prevent Print (Ctrl+P / Cmd+P)
       if ((e.ctrlKey || (isMac && e.metaKey)) && e.key === 'p') {
         e.preventDefault();
-        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nDocument printing is restricted for this terminal.');
+        setIsScreenMasked(true);
+        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nDocument compilation & printing are restricted.');
+        setTimeout(() => setIsScreenMasked(false), 3000);
         return false;
       }
 
+      // Prevent Save Page (Ctrl+S / Cmd+S)
       if ((e.ctrlKey || (isMac && e.metaKey)) && e.key === 's') {
         e.preventDefault();
-        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nOffline page compiling is restricted.');
+        setIsScreenMasked(true);
+        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nOffline page compiled compilation is restricted.');
+        setTimeout(() => setIsScreenMasked(false), 3000);
+        return false;
+      }
+
+      // Prevent View Source (Ctrl+U / Cmd+U)
+      if ((e.ctrlKey || (isMac && e.metaKey)) && e.key === 'u') {
+        e.preventDefault();
+        setIsScreenMasked(true);
+        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nSource tree inspect access is restricted.');
+        setTimeout(() => setIsScreenMasked(false), 3000);
+        return false;
+      }
+
+      // Block Developer Tools (F12, Ctrl+Shift+I / Cmd+Option+I, Ctrl+Shift+J / Cmd+Option+J, Ctrl+Shift+C / Cmd+Option+C)
+      if (
+        e.key === 'F12' ||
+        ((e.ctrlKey || (isMac && e.metaKey)) && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
+        (isMac && e.metaKey && e.altKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))
+      ) {
+        e.preventDefault();
+        setIsScreenMasked(true);
+        alert('SECURITY PROTOCOL SHIELD ACTIVATED:\nDeveloper tools inspect mode is restricted for secure room terminals.');
+        setTimeout(() => setIsScreenMasked(false), 3000);
         return false;
       }
     };
 
     const handleContextMenu = (e: MouseEvent) => {
-      // Allow general action inputs, context menus are disabled specifically for images/messages
+      // Disallow context menus specifically for images, messages, and elements to prevent "Save Image" or inspector hooks
       const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'IMG' || target.closest('.no-print-non-admin') || target.tagName === 'SPAN' || target.tagName === 'P')) {
+      if (target && (target.tagName === 'IMG' || target.closest('.no-print-non-admin') || target.tagName === 'SPAN' || target.tagName === 'P' || target.tagName === 'VIDEO')) {
         e.preventDefault();
       }
     };
 
+    const handleDragStart = (e: DragEvent) => {
+      // Prevent highlighting images or text dragging for offline copy
+      e.preventDefault();
+    };
+
     window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('contextmenu', handleContextMenu, true);
+    window.addEventListener('dragstart', handleDragStart, true);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('contextmenu', handleContextMenu, true);
+      window.removeEventListener('dragstart', handleDragStart, true);
     };
   }, [isAdmin]);
 
-  // Window Focus & Document Visibility Observer
+  // Window Focus, Visibility & Cursor Boundary Observer
   useEffect(() => {
     if (isAdmin) {
       setIsScreenMasked(false);
@@ -304,14 +342,27 @@ function ChatApp() {
       }
     };
 
+    const handleMouseLeave = () => {
+      // If cursor leaves the window edge (e.g. attempting to select screen snip/cropping boundaries out of browser), mask content instantly!
+      setIsScreenMasked(true);
+    };
+
+    const handleMouseEnter = () => {
+      setIsScreenMasked(false);
+    };
+
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('mouseleave', handleMouseLeave);
+    document.addEventListener('mouseenter', handleMouseEnter);
 
     return () => {
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('mouseenter', handleMouseEnter);
     };
   }, [isAdmin]);
 
@@ -1107,19 +1158,38 @@ function ChatApp() {
       className={cn("flex h-screen bg-[var(--crack-bg)] text-white font-sans overflow-hidden transition-all duration-700 relative", currentTheme.class)}
     >
       {!isAdmin && (
-        <style dangerouslySetInnerHTML={{ __html: `
-          @media print {
-            body { display: none !important; }
-            #crackchat-main-terminal { display: none !important; }
-            * { display: none !important; }
-          }
-          * {
-            -webkit-user-select: none !important;
-            -moz-user-select: none !important;
-            -ms-user-select: none !important;
-            user-select: none !important;
-          }
-        `}} />
+        <>
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              html, body, #root, #crackchat-main-terminal, * {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+              }
+            }
+            * {
+              -webkit-user-select: none !important;
+              -moz-user-select: none !important;
+              -ms-user-select: none !important;
+              user-select: none !important;
+              -webkit-user-drag: none !important;
+              user-drag: none !important;
+            }
+            img, video, canvas {
+              pointer-events: none !important;
+              -webkit-user-drag: none !important;
+              user-drag: none !important;
+            }
+          `}} />
+          {/* Repeating Dynamic Security Watermark Matrix to lock-in user identifiers on any bypass */}
+          <div className="fixed inset-0 overflow-hidden pointer-events-none z-[80] opacity-[0.04] select-none grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 rotate-[-15deg] scale-150 justify-items-center content-around">
+            {Array.from({ length: 48 }).map((_, i) => (
+              <div key={i} className="text-[10px] md:text-xs font-mono tracking-[0.2em] uppercase text-white font-bold whitespace-nowrap p-6 select-none leading-none">
+                {username || 'SECURE_NODE'} // ID_{userId ? userId.substring(0, 8) : 'MEMBER'} // NO_SCRN
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       <AnimatePresence>
