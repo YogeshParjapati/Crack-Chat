@@ -824,7 +824,7 @@ function ChatApp() {
 
   if (!isJoined) {
     return (
-      <div className={cn("min-h-screen bg-[var(--crack-bg)] text-white flex flex-col items-center justify-center p-4 font-sans transition-all duration-700 relative overflow-hidden", currentTheme.class)}>
+      <div className={cn("min-h-screen bg-[var(--crack-bg)] text-white flex flex-col items-center justify-start md:justify-center p-4 md:p-8 font-sans transition-all duration-700 relative overflow-y-auto scrollbar-hide", currentTheme.class)}>
         {currentTheme.bgImage && (
           <div 
             className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
@@ -836,27 +836,27 @@ function ChatApp() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-4xl w-full space-y-12 relative z-10"
+          className="max-w-4xl w-full my-auto space-y-8 md:space-y-12 relative z-10 py-6"
         >
-          <div className="text-center space-y-4">
+          <div className="text-center space-y-3">
             <motion.h1 
               initial={{ scale: 0.8, filter: 'blur(10px)' }}
               animate={{ scale: 1, filter: 'blur(0px)' }}
-              className="text-8xl md:text-9xl font-black tracking-tighter uppercase italic text-white"
+              className="text-5xl sm:text-7xl md:text-9xl font-black tracking-tighter uppercase italic text-white break-words"
             >
               CRACK<span className="text-[var(--crack-orange)]">CHAT</span>
             </motion.h1>
-            <p className="text-zinc-400 text-sm md:text-base uppercase tracking-[0.5em] font-mono animate-pulse">
+            <p className="text-zinc-400 text-xs sm:text-sm md:text-base uppercase tracking-[0.3em] md:tracking-[0.5em] font-mono animate-pulse">
               A real-time chat platform
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-12 w-full">
             {/* Left: Identity */}
-            <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/5 p-8 space-y-8 rounded-sm shadow-2xl">
-              <h2 className="text-2xl font-black uppercase tracking-tighter border-b border-white/10 pb-4">Identity</h2>
+            <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/5 p-5 md:p-8 space-y-6 md:space-y-8 rounded-sm shadow-2xl">
+              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter border-b border-white/10 pb-3 md:pb-4">Identity</h2>
               
-              <div className="space-y-6">
+              <div className="space-y-4 md:space-y-6">
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
                   <input
@@ -864,21 +864,21 @@ function ChatApp() {
                     placeholder="CODENAME"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 py-5 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase text-lg transition-all"
+                    className="w-full bg-black/50 border border-white/10 py-4 md:py-5 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase text-base md:text-lg transition-all"
                   />
                 </div>
               </div>
               
-              <div className="space-y-4">
+              <div className="space-y-3 md:space-y-4">
                 <label className="text-xs text-zinc-400 uppercase font-black tracking-widest">Select Vibe</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[195px] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[170px] md:max-h-[195px] overflow-y-auto pr-1 scrollbar-thin">
                   {THEMES.map(t => (
                     <button
                       key={t.name}
                       type="button"
                       onClick={() => setCurrentTheme(t)}
                       className={cn(
-                        "flex items-center space-x-2 p-2.5 border transition-all text-left bg-black/40 hover:bg-black/20 group cursor-pointer relative overflow-hidden",
+                        "flex items-center space-x-2 p-2 px-2.5 border transition-all text-left bg-black/40 hover:bg-black/20 group cursor-pointer relative overflow-hidden",
                         currentTheme.name === t.name ? "border-white scale-[1.02] bg-white/5 shadow-[0_0_15px_rgba(255,255,255,0.05)]" : "border-white/5 opacity-60 hover:opacity-100"
                       )}
                       style={{ 
@@ -892,10 +892,10 @@ function ChatApp() {
                           style={{ backgroundImage: `url(${t.bgImage})` }}
                         />
                       )}
-                      <div className="w-3 h-3 rounded-full flex-shrink-0 transition-transform group-hover:scale-110 relative z-10" style={{ backgroundColor: t.color, boxShadow: `0 0 10px ${t.color}88` }} />
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-transform group-hover:scale-110 relative z-10" style={{ backgroundColor: t.color, boxShadow: `0 0 10px ${t.color}88` }} />
                       <div className="flex flex-col min-w-0 relative z-10">
-                        <span className="text-[10px] font-black uppercase tracking-tighter truncate text-white">{t.name}</span>
-                        <span className="text-[7.5px] font-mono tracking-widest uppercase truncate text-zinc-500 group-hover:text-zinc-400 transition-colors">{t.vibe}</span>
+                        <span className="text-[9px] font-black uppercase tracking-tighter truncate text-white">{t.name}</span>
+                        <span className="text-[7px] font-mono tracking-widest uppercase truncate text-zinc-500 group-hover:text-zinc-400 transition-colors">{t.vibe}</span>
                       </div>
                     </button>
                   ))}
@@ -904,77 +904,77 @@ function ChatApp() {
             </div>
 
             {/* Right: Rooms */}
-            <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/5 p-8 flex flex-col space-y-6 rounded-sm shadow-2xl">
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <h2 className="text-2xl font-black uppercase tracking-tighter">Rooms</h2>
+            <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/5 p-5 md:p-8 flex flex-col space-y-4 md:space-y-6 rounded-sm shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3 md:pb-4">
+                <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter">Rooms</h2>
                 <button 
                   onClick={() => setShowRoomCreate(!showRoomCreate)}
                   className="text-zinc-500 hover:text-white transition-all hover:scale-110"
                 >
-                  <Plus className="w-6 h-6" />
+                  <Plus className="w-5 h-5 md:w-6 md:h-6" />
                 </button>
               </div>
 
               {error && <p className="text-red-500 text-xs uppercase font-black animate-bounce">{error}</p>}
 
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
                 <input 
                   type="text" 
                   placeholder="SEARCH ROOMS..." 
                   value={roomSearch}
                   onChange={(e) => setRoomSearch(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 p-3 pl-10 text-xs focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
+                  className="w-full bg-black/50 border border-white/10 p-2.5 pl-9 text-[10.5px] md:text-xs focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
                 />
               </div>
 
               {showRoomCreate ? (
-                <form onSubmit={handleCreateRoom} className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+                <form onSubmit={handleCreateRoom} className="space-y-3 md:space-y-4 animate-in fade-in zoom-in-95 duration-300">
                   <input
                     type="text"
                     placeholder="ROOM NAME"
                     value={newRoomName}
                     onChange={(e) => setNewRoomName(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 p-4 text-sm focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
+                    className="w-full bg-black/50 border border-white/10 p-3 md:p-4 text-xs md:text-sm focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
                   />
                   <input
                     type="password"
                     placeholder="PASSWORD (OPTIONAL)"
                     value={newRoomPass}
                     onChange={(e) => setNewRoomPass(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 p-4 text-sm focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
+                    className="w-full bg-black/50 border border-white/10 p-3 md:p-4 text-xs md:text-sm focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
                   />
-                  <div className="flex gap-3">
-                    <button type="submit" className="flex-1 bg-[var(--crack-orange)] text-black font-black uppercase py-3 text-sm hover:brightness-110 transition-all">Create</button>
-                    <button type="button" onClick={() => setShowRoomCreate(false)} className="px-6 border border-white/10 text-xs uppercase hover:bg-white/5 transition-colors">Cancel</button>
+                  <div className="flex gap-2.5">
+                    <button type="submit" className="flex-1 bg-[var(--crack-orange)] text-black font-black uppercase py-2.5 md:py-3 text-xs md:text-sm hover:brightness-110 transition-all">Create</button>
+                    <button type="button" onClick={() => setShowRoomCreate(false)} className="px-4 md:px-6 border border-white/10 text-[10px] md:text-xs uppercase hover:bg-white/5 transition-colors">Cancel</button>
                   </div>
                 </form>
               ) : (
-                <div className="flex-1 overflow-y-auto max-h-[250px] space-y-3 pr-2 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto max-h-[190px] md:max-h-[250px] space-y-2 pr-1 scrollbar-hide">
                   {rooms.filter(r => r.name.toLowerCase().includes(roomSearch.toLowerCase())).map(room => (
                     <div 
                       key={room.id}
                       onClick={() => !room.hasPassword && handleJoinRoom(room, '')}
-                      className="group flex items-center justify-between bg-white/5 p-4 border border-white/5 hover:border-white/20 hover:bg-white/10 transition-all cursor-pointer relative overflow-hidden"
+                      className="group flex items-center justify-between bg-white/5 p-3 md:p-4 border border-white/5 hover:border-white/20 hover:bg-white/10 transition-all cursor-pointer relative overflow-hidden"
                     >
-                      <div className="flex items-center space-x-3 relative z-10">
-                        <Hash className="w-5 h-5 text-zinc-600 group-hover:text-white transition-colors" />
-                        <span className="text-base font-black uppercase tracking-tighter">{room.name}</span>
-                        {room.hasPassword && <Lock className="w-4 h-4 text-zinc-600" />}
+                      <div className="flex items-center space-x-2.5 md:space-x-3 relative z-10 min-w-0 flex-1 mr-2">
+                        <Hash className="w-4 h-4 md:w-5 md:h-5 text-zinc-600 group-hover:text-white transition-colors flex-shrink-0" />
+                        <span className="text-sm md:text-base font-black uppercase tracking-tighter truncate">{room.name}</span>
+                        {room.hasPassword && <Lock className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" />}
                       </div>
-                      <div className="flex items-center space-x-3 relative z-10">
+                      <div className="flex items-center space-x-2 relative z-10 flex-shrink-0">
                         {room.hasPassword && (
                           <input 
                             type="password" 
                             placeholder="PASS" 
-                            className="w-20 bg-black/50 border border-white/10 text-[10px] p-2 focus:outline-none focus:border-[var(--crack-orange)] transition-all"
+                            className="w-14 sm:w-20 bg-black/50 border border-white/10 text-[9px] md:text-[10px] p-1.5 focus:outline-none focus:border-[var(--crack-orange)] transition-all"
                             onChange={(e) => setJoinPass(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                           />
                         )}
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleJoinRoom(room, joinPass); }}
-                          className="text-xs font-black uppercase text-white md:opacity-0 md:group-hover:opacity-100 transition-all hover:scale-110"
+                          className="text-[10px] md:text-xs font-black uppercase text-white md:opacity-0 md:group-hover:opacity-100 transition-all hover:scale-110 px-2 py-1 bg-white/5 md:bg-transparent rounded-sm"
                         >
                           Join
                         </button>
@@ -1104,7 +1104,7 @@ function ChatApp() {
                 <Trash2 className="w-5 h-5" />
               </button>
             )}
-            <div className="text-white font-black italic tracking-tighter text-sm md:text-base">CRACKCHAT</div>
+            <div className="text-white font-black italic tracking-tighter text-sm md:text-base hidden min-[380px]:block">CRACKCHAT</div>
           </div>
         </header>
 
@@ -1150,7 +1150,7 @@ function ChatApp() {
                 
                 <div className="max-w-[90%] md:max-w-2xl">
                   {msg.type === 'text' && (
-                    <div className="text-zinc-300 text-sm leading-relaxed bg-white/5 backdrop-blur-sm p-4 border-l-2 border-white/20 transition-all duration-500 hover:bg-white/10 hover:translate-x-1 shadow-xl">
+                    <div className="text-zinc-300 text-sm leading-relaxed bg-white/5 backdrop-blur-sm p-4 border-l-2 border-white/20 transition-all duration-500 hover:bg-white/10 hover:translate-x-1 shadow-xl break-words whitespace-pre-wrap">
                       {msg.text}
                     </div>
                   )}
@@ -1187,12 +1187,13 @@ function ChatApp() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              className="absolute bottom-24 left-4 md:left-6 z-30 scale-90 origin-bottom-left md:scale-100"
+              className="absolute bottom-24 left-4 md:left-6 z-30 w-[280px] sm:w-[350px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-lg overflow-hidden border border-white/5"
             >
               <EmojiPicker 
                 theme={EmojiTheme.DARK}
                 onEmojiClick={(emojiData) => setInputText(prev => prev + emojiData.emoji)}
-                width={window.innerWidth < 640 ? 280 : 350}
+                width="100%"
+                height={320}
               />
             </motion.div>
           )}
@@ -1202,7 +1203,7 @@ function ChatApp() {
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="absolute bottom-24 left-4 md:left-6 z-30 w-[calc(100%-2rem)] md:w-[380px] bg-zinc-900 border border-zinc-800 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-lg"
+              className="absolute bottom-24 left-4 md:left-6 z-30 w-[calc(100%-2rem)] max-w-[380px] bg-zinc-900 border border-zinc-800 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-lg"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-4">
@@ -1244,7 +1245,7 @@ function ChatApp() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="grid grid-cols-3 gap-2 max-h-[200px] sm:max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
                 {isMediaLoading ? (
                   <div className="col-span-3 py-12 flex flex-col items-center justify-center space-y-3">
                     <div className="w-6 h-6 border-2 border-[var(--crack-orange)] border-t-transparent rounded-full animate-spin" />
@@ -1426,32 +1427,32 @@ function ChatApp() {
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4"
             >
-              <div className="bg-[var(--crack-surface)] border border-white/5 p-6 md:p-8 max-w-xl w-full space-y-6 rounded-md shadow-2xl relative overflow-hidden">
+              <div className="bg-[var(--crack-surface)] border border-white/5 p-4 sm:p-6 md:p-8 max-w-xl w-full space-y-4 sm:space-y-6 rounded-md shadow-2xl relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-tr from-[var(--crack-orange)]/5 via-transparent to-transparent pointer-events-none" />
                 
                 <div className="flex items-center justify-between relative z-10">
                   <div>
-                    <h3 className="text-2xl font-black uppercase tracking-tighter italic text-white flex items-center space-x-2">
-                      <Palette className="w-6 h-6 text-[var(--crack-orange)]" />
+                    <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tighter italic text-white flex items-center space-x-2">
+                      <Palette className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--crack-orange)]" />
                       <span>THEME ATMOSPHERES</span>
                     </h3>
-                    <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 mt-1">Modulate visual wavelengths</p>
+                    <p className="text-[8px] sm:text-[9px] font-mono uppercase tracking-widest text-zinc-500 mt-1">Modulate visual wavelengths</p>
                   </div>
                   <button 
                     onClick={() => setShowThemePicker(false)}
                     className="p-1.5 hover:bg-white/5 text-zinc-500 hover:text-white transition-all rounded"
                   >
-                    <X className="w-6 h-6" />
+                    <X className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1 scrollbar-thin relative z-10">
+                <div className="grid grid-cols-1 min-[450px]:grid-cols-2 gap-2.5 sm:gap-3 max-h-[290px] sm:max-h-[420px] overflow-y-auto pr-1 scrollbar-thin relative z-10">
                   {THEMES.map(t => (
                     <button
                       key={t.name}
                       onClick={() => { setCurrentTheme(t); setShowThemePicker(false); }}
                       className={cn(
-                        "p-3.5 border flex flex-col items-start space-y-2.5 transition-all relative overflow-hidden text-left group bg-black/40 hover:bg-black/20 hover:scale-[1.01] cursor-pointer",
+                        "p-3 border flex flex-col items-start space-y-2 transition-all relative overflow-hidden text-left group bg-black/40 hover:bg-black/20 hover:scale-[1.01] cursor-pointer",
                         currentTheme.name === t.name ? "bg-white/5 border-white" : "border-white/5 opacity-70 hover:opacity-100"
                       )}
                       style={{ 
@@ -1466,16 +1467,16 @@ function ChatApp() {
                         />
                       )}
                       <div className="flex items-center justify-between w-full relative z-10">
-                        <div className="w-3.5 h-3.5 rounded-full flex-shrink-0 transition-transform group-hover:scale-110" style={{ backgroundColor: t.color, boxShadow: `0 0 10px ${t.color}` }} />
-                        <span className="text-[7.5px] font-mono tracking-widest text-[var(--crack-orange)] group-hover:text-white transition-colors opacity-80 uppercase">{t.vibe}</span>
+                        <div className="w-3 h-3 rounded-full flex-shrink-0 transition-transform group-hover:scale-110" style={{ backgroundColor: t.color, boxShadow: `0 0 10px ${t.color}` }} />
+                        <span className="text-[7px] font-mono tracking-widest text-[var(--crack-orange)] group-hover:text-white transition-colors opacity-80 uppercase">{t.vibe}</span>
                       </div>
                       
-                      <div className="min-w-0 relative z-10">
-                        <span className="text-xs font-black uppercase tracking-tighter text-white block truncate">{t.name}</span>
+                      <div className="min-w-0 relative z-10 w-full">
+                        <span className="text-[11px] sm:text-xs font-black uppercase tracking-tighter text-white block truncate">{t.name}</span>
                       </div>
-
+ 
                       {/* Visual swatch indicator strip */}
-                      <div className="flex space-x-1 w-full pt-1.5 relative z-10">
+                      <div className="flex space-x-1 w-full pt-1 relative z-10">
                         <div className="w-full h-1 bg-[#050505] rounded-l border border-white/5" title="Background Base" />
                         <div className="w-full h-1 bg-[#121214] border border-white/5" title="Surface Level" />
                         <div className="w-full h-1 rounded-r" style={{ backgroundColor: t.color }} title="Accent Flare" />
@@ -1520,7 +1521,7 @@ function ChatApp() {
               initial={{ x: 400 }}
               animate={{ x: 0 }}
               exit={{ x: 400 }}
-              className="fixed right-0 top-0 bottom-0 w-80 bg-zinc-950 border-l border-white/10 z-[70] p-6 flex flex-col shadow-2xl backdrop-blur-xl"
+              className="fixed right-0 top-0 bottom-0 w-full sm:w-80 max-w-full bg-zinc-950 border-l border-white/10 z-[70] p-6 flex flex-col shadow-2xl backdrop-blur-xl"
             >
               <div className="flex items-center justify-between mb-8">
                 <div className="flex flex-col">
