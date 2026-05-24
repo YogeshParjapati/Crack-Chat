@@ -211,6 +211,39 @@ function ChatApp() {
   const [adminPassword, setAdminPassword] = useState('');
   const [adminError, setAdminError] = useState('');
 
+  // Typing state for Indicator
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const typingTimeoutRef = useRef<any>(null);
+  const lastTypingUpdateTimeRef = useRef<number>(0);
+
+  const handleUserTyping = () => {
+    if (!isJoined || !currentRoom || !userId) return;
+    const now = Date.now();
+    const presenceRef = doc(db, `rooms/${currentRoom.id}/presence`, userId);
+
+    if (now - lastTypingUpdateTimeRef.current > 3000) {
+      lastTypingUpdateTimeRef.current = now;
+      setDoc(presenceRef, {
+        isTyping: true,
+        typingLastSeen: now
+      }, { merge: true }).catch(() => {});
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      if (userId && currentRoom) {
+        const pRef = doc(db, `rooms/${currentRoom.id}/presence`, userId);
+        setDoc(pRef, {
+          isTyping: false
+        }, { merge: true }).catch(() => {});
+      }
+      lastTypingUpdateTimeRef.current = 0;
+    }, 4000);
+  };
+
   // Admin Presence Listener
   useEffect(() => {
     if (!isAdmin) {
@@ -355,7 +388,10 @@ function ChatApp() {
 
   // Presence Heartbeat & Listener
   useEffect(() => {
-    if (!isJoined || !currentRoom || !userId) return;
+    if (!isJoined || !currentRoom || !userId) {
+      setTypingUsers([]);
+      return;
+    }
 
     const presenceRef = doc(db, `rooms/${currentRoom.id}/presence`, userId);
     
@@ -374,7 +410,8 @@ function ChatApp() {
       userId, 
       username, 
       lastSeen: Date.now(),
-      device: getDeviceInfo()
+      device: getDeviceInfo(),
+      isTyping: false
     }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, presenceRef.path));
 
     // 2. Heartbeat every 20s
@@ -382,7 +419,7 @@ function ChatApp() {
       setDoc(presenceRef, { lastSeen: Date.now() }, { merge: true }).catch(() => {});
     }, 20000);
 
-    // 3. Listener for online count
+    // 3. Listener for online count and other users' typing indicators
     const q = query(collection(db, `rooms/${currentRoom.id}/presence`));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const now = Date.now();
@@ -392,6 +429,21 @@ function ChatApp() {
         return data.lastSeen && (now - data.lastSeen < 60000);
       });
       setOnlineCount(activeMembers.length || 1);
+
+      // Extract typing users, excluding local user and filtering stale typing flags
+      const typingList: string[] = [];
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (
+          data.userId !== userId &&
+          data.isTyping === true &&
+          data.typingLastSeen &&
+          (now - data.typingLastSeen < 6000)
+        ) {
+          typingList.push(data.username || 'Anonymous User');
+        }
+      });
+      setTypingUsers(typingList);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `rooms/${currentRoom.id}/presence`);
     });
@@ -401,6 +453,7 @@ function ChatApp() {
       unsubscribe();
       // Try to mark as offline on cleanup
       deleteDoc(presenceRef).catch(() => {});
+      setTypingUsers([]);
     };
   }, [isJoined, currentRoom, userId, username]);
 
@@ -535,6 +588,15 @@ function ChatApp() {
       }
 
       try {
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+        if (userId && currentRoom) {
+          const presenceRef = doc(db, `rooms/${currentRoom.id}/presence`, userId);
+          setDoc(presenceRef, { isTyping: false }, { merge: true }).catch(() => {});
+        }
+        lastTypingUpdateTimeRef.current = 0;
+
         await addDoc(collection(db, `rooms/${currentRoom.id}/messages`), messageData);
         setInputText('');
         setReplyTo(null);
@@ -1265,6 +1327,22 @@ function ChatApp() {
               </button>
             </div>
           )}
+
+          {typingUsers.length > 0 && (
+            <div className="flex items-center space-x-2 mb-2 ml-2 text-zinc-500 font-mono text-[9px] uppercase tracking-wider">
+              <div className="flex space-x-1 items-center">
+                <span className="w-1 h-1 rounded-full bg-[var(--crack-orange)] animate-bounce" style={{ animationDelay: '0s', animationDuration: '1s' }} />
+                <span className="w-1 h-1 rounded-full bg-[var(--crack-orange)] animate-bounce" style={{ animationDelay: '0.2s', animationDuration: '1s' }} />
+                <span className="w-1 h-1 rounded-full bg-[var(--crack-orange)] animate-bounce" style={{ animationDelay: '0.4s', animationDuration: '1s' }} />
+              </div>
+              <span className="text-[var(--crack-orange)] font-bold animate-pulse">
+                {typingUsers.length === 1 
+                  ? `${typingUsers[0]} IS TYPING...` 
+                  : `${typingUsers.join(', ')} ARE TYPING...`}
+              </span>
+            </div>
+          )}
+
           <form 
             onSubmit={handleSendMessage}
             className="relative flex items-center bg-black/60 backdrop-blur-2xl border border-white/5 focus-within:border-white transition-all duration-500 shadow-2xl"
@@ -1304,7 +1382,10 @@ function ChatApp() {
             <input
               type="text"
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                handleUserTyping();
+              }}
               placeholder="TRANSMIT..."
               autoComplete="off"
               autoCorrect="off"
