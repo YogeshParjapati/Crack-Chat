@@ -1,5 +1,5 @@
 {
   "name": "CrackChat",
   "description": "A real-time chat platform with GIF search, emoji support, and room-based chat. No registration required.",
-  "requestFramePermissions": []
+  "requestFramePermissions": ["camera", "microphone"]
 }

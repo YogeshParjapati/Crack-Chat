@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2, Terminal, Cpu, Layers, Wifi } from 'lucide-react';
+import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2, Terminal, Cpu, Layers, Wifi, Mic, MicOff, VideoOff } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 
 import { cn } from '@/src/lib/utils';
@@ -203,6 +203,18 @@ function ChatApp() {
   const [roomSearch, setRoomSearch] = useState('');
   const [replyTo, setReplyTo] = useState<{ text: string; sender: string } | null>(null);
   const [callState, setCallState] = useState<{ type: 'voice' | 'video'; status: 'calling' | 'incoming' | 'active'; peer?: string } | null>(null);
+  
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [micMuted, setMicMuted] = useState(false);
+  const [videoMuted, setVideoMuted] = useState(false);
+  const [callError, setCallError] = useState('');
+  const [volumeLevel, setVolumeLevel] = useState(0);
+
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+
   const [onlineCount, setOnlineCount] = useState(1);
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('crackchat_is_admin') === 'true');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -370,6 +382,112 @@ function ChatApp() {
 
     return () => unsubscribe();
   }, [currentRoom, isJoined, userId]);
+
+  // Call Media Access Lifecycle & Web Audio API indicator
+  useEffect(() => {
+    if (!callState) {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        setLocalStream(null);
+      }
+      setMicMuted(false);
+      setVideoMuted(false);
+      setCallError('');
+      setVolumeLevel(0);
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      return;
+    }
+
+    const isTransmitting = callState.status === 'calling' || callState.status === 'active';
+    if (isTransmitting) {
+      let activeStream: MediaStream | null = null;
+      
+      const initializeMedia = async () => {
+        try {
+          setCallError('');
+          const constraints = {
+            audio: true,
+            video: callState.type === 'video' ? {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: 'user'
+            } : false
+          };
+          
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          activeStream = stream;
+          setLocalStream(stream);
+
+          try {
+            const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioCtxClass) {
+              const audioCtx = new AudioCtxClass();
+              audioContextRef.current = audioCtx;
+              const analyser = audioCtx.createAnalyser();
+              analyserRef.current = analyser;
+              analyser.fftSize = 256;
+              const source = audioCtx.createMediaStreamSource(stream);
+              source.connect(analyser);
+
+              const bufferLength = analyser.frequencyBinCount;
+              const dataArray = new Uint8Array(bufferLength);
+
+              const updateVolume = () => {
+                if (!analyserRef.current) return;
+                analyserRef.current.getByteFrequencyData(dataArray);
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                  sum += dataArray[i];
+                }
+                const average = sum / bufferLength;
+                setVolumeLevel(Math.min(100, Math.round((average / 128) * 100)));
+                animationFrameRef.current = requestAnimationFrame(updateVolume);
+              };
+              updateVolume();
+            }
+          } catch (audioErr) {
+            console.error("Audio feedback setup error:", audioErr);
+          }
+        } catch (err: any) {
+          console.error("Hardware Device Access Error:", err);
+          if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+            setCallError('CAMERA/MIC ACCESS BLOCKED. PLEASE ALLOW PERMISSIONS IN BROWSER SETTINGS.');
+          } else {
+            setCallError('HARDWARE DEVICE NOT FOUND OR BUSY. MAKE SURE YOUR MIC/CAMERA IS ACTIVE.');
+          }
+        }
+      };
+
+      initializeMedia();
+
+      return () => {
+        if (activeStream) {
+          activeStream.getTracks().forEach(track => track.stop());
+        }
+        if (audioContextRef.current) {
+          audioContextRef.current.close().catch(() => {});
+          audioContextRef.current = null;
+        }
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+      };
+    }
+  }, [callState?.status, callState?.type]);
+
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream, videoMuted]);
 
   // Heartbeat for current room
   useEffect(() => {
@@ -669,6 +787,26 @@ function ChatApp() {
       await deleteDoc(doc(db, `rooms/${currentRoom.id}/calls`, 'active'));
     } catch (error) {
       console.error("Failed to end call", error);
+    }
+  };
+
+  const toggleMic = () => {
+    if (localStream) {
+      const audioTracks = localStream.getAudioTracks();
+      audioTracks.forEach(track => {
+        track.enabled = !track.enabled;
+      });
+      setMicMuted(!micMuted);
+    }
+  };
+
+  const toggleVideo = () => {
+    if (localStream) {
+      const videoTracks = localStream.getVideoTracks();
+      videoTracks.forEach(track => {
+        track.enabled = !track.enabled;
+      });
+      setVideoMuted(!videoMuted);
     }
   };
 
@@ -1418,50 +1556,163 @@ function ChatApp() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-6"
+              className="absolute inset-0 bg-black/95 backdrop-blur-2xl z-[100] flex flex-col items-center justify-center p-6 text-white"
             >
-              <div className="text-center space-y-8 max-w-sm w-full">
-                <div className="relative inline-block">
-                  <div className="w-32 h-32 rounded-full bg-zinc-800 flex items-center justify-center border-4 border-[var(--crack-orange)] animate-pulse">
-                    {callState.type === 'video' ? <Video className="w-12 h-12 text-[var(--crack-orange)]" /> : <Phone className="w-12 h-12 text-[var(--crack-orange)]" />}
-                  </div>
-                  {callState.status === 'active' && <div className="absolute -bottom-2 -right-2 bg-green-500 w-8 h-8 rounded-full border-4 border-black" />}
-                </div>
+              <div className="text-center space-y-6 max-w-sm w-full flex flex-col items-center justify-center">
                 
-                <div className="space-y-2">
-                  <h3 className="text-3xl font-black uppercase tracking-tighter italic">
-                    {callState.status === 'calling' ? 'Transmitting...' : callState.status === 'incoming' ? 'Incoming Signal' : 'Link Established'}
+                {/* Visualizer Zone */}
+                {callState.type === 'video' ? (
+                  <div className="relative w-full aspect-video bg-zinc-950 border border-white/10 rounded-sm overflow-hidden flex items-center justify-center group shadow-2xl">
+                    {localStream && !videoMuted ? (
+                      <video 
+                        ref={localVideoRef}
+                        autoPlay 
+                        playsInline 
+                        muted 
+                        className="w-full h-full object-cover scale-x-[-1]"
+                      />
+                    ) : (
+                      <div className="text-center space-y-2">
+                        <div className="w-12 h-12 mx-auto rounded-full bg-zinc-900 border border-white/5 flex items-center justify-center">
+                          <VideoOff className="w-5 h-5 text-zinc-500 animate-pulse" />
+                        </div>
+                        <p className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">Webcam disabled or muted</p>
+                      </div>
+                    )}
+
+                    {/* Left corner mini info overlay */}
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-sm border border-white/5 flex items-center space-x-1.5 font-mono shadow">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--crack-orange)] animate-ping" />
+                      <span className="text-[7px] font-bold uppercase tracking-wider text-white">
+                        {callState.status} • LOCAL
+                      </span>
+                    </div>
+
+                    {/* Mic feedback sound level in the stream layout */}
+                    {localStream && !micMuted && (
+                      <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-sm border border-white/5 flex items-center space-x-2 shadow max-w-[120px] w-full">
+                        <Mic className="w-3 h-3 text-[var(--crack-orange)] animate-pulse" />
+                        <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-[var(--crack-orange)] transition-all duration-75"
+                            style={{ width: `${volumeLevel}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="relative w-44 h-44 flex items-center justify-center">
+                    {/* Pulsing Concentric Visualized Radiuses based on actual microphone audio input levels */}
+                    {localStream && !micMuted && (
+                      <>
+                        <div 
+                          className="absolute inset-0 rounded-full bg-[var(--crack-orange)]/5 border border-[var(--crack-orange)]/10 transition-all duration-75 scale-125"
+                          style={{ transform: `scale(${1 + volumeLevel / 150})` }}
+                        />
+                        <div 
+                          className="absolute inset-4 rounded-full bg-[var(--crack-orange)]/5 border border-[var(--crack-orange)]/15 transition-all duration-75 scale-110"
+                          style={{ transform: `scale(${1 + volumeLevel / 200})` }}
+                        />
+                      </>
+                    )}
+
+                    <div className={cn(
+                      "w-32 h-32 rounded-full flex flex-col items-center justify-center border-4 relative z-10 transition-all duration-300 shadow-2xl bg-zinc-950",
+                      micMuted ? "border-red-500/50" : "border-[var(--crack-orange)]"
+                    )}>
+                      {micMuted ? (
+                        <MicOff className="w-10 h-10 text-red-500 animate-pulse" />
+                      ) : (
+                        <Phone className="w-10 h-10 text-[var(--crack-orange)]" />
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Status indicators and call descriptor texts */}
+                <div className="space-y-1.5">
+                  <h3 className="text-2xl font-black uppercase tracking-tighter italic">
+                    {callState.status === 'calling' ? 'Transmitting Link...' : callState.status === 'incoming' ? 'Incoming Signal' : 'Stream Connection Active'}
                   </h3>
-                  <p className="text-zinc-500 uppercase tracking-widest text-xs font-mono">
-                    {callState.status === 'incoming' ? `From: ${callState.peer}` : `Room: ${currentRoom?.name}`}
-                  </p>
+                  <div className="text-zinc-500 uppercase tracking-widest text-[9px] font-mono flex flex-col space-y-0.5">
+                    <span>{callState.status === 'incoming' ? `Sender: ${callState.peer}` : `Current Frequency: ${currentRoom?.name}`}</span>
+                    {localStream && (
+                      <span className="text-green-400/80 font-black">● Dev Media Feed Active</span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-center space-x-6">
+                {/* Call Error Panel */}
+                {callError && (
+                  <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-sm text-center">
+                    <p className="text-[9px] text-red-500 font-bold uppercase tracking-wider leading-relaxed">
+                      {callError}
+                    </p>
+                  </div>
+                )}
+
+                {/* Device Access Control overlay buttons */}
+                {localStream && (
+                  <div className="flex items-center justify-center space-x-3 bg-white/5 border border-white/5 px-4 py-2 rounded-sm ring-1 ring-white/5">
+                    {/* Toggle Microphone button */}
+                    <button
+                      onClick={toggleMic}
+                      className={cn(
+                        "p-2.5 rounded-full transition-all duration-200",
+                        micMuted ? "bg-red-500/20 text-red-500 border border-red-500/30" : "bg-white/10 hover:bg-white/20 text-white"
+                      )}
+                      title={micMuted ? "Unmute Mic" : "Mute Mic"}
+                    >
+                      {micMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+
+                    {/* Toggle Video/Camera button if it's a video call */}
+                    {callState.type === 'video' && (
+                      <button
+                        onClick={toggleVideo}
+                        className={cn(
+                          "p-2.5 rounded-full transition-all duration-200",
+                          videoMuted ? "bg-red-500/20 text-red-500 border border-red-500/30" : "bg-white/10 hover:bg-white/20 text-white"
+                        )}
+                        title={videoMuted ? "Enable Camera" : "Disable Camera"}
+                      >
+                        {videoMuted ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions bottom bar (Join, Terminate, Reject) */}
+                <div className="flex items-center justify-center space-x-6 pt-2">
                   {callState.status === 'incoming' ? (
                     <>
                       <button 
                         onClick={handleAcceptCall}
-                        className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center hover:scale-110 transition-transform shadow-[0_0_20px_rgba(34,197,94,0.4)]"
+                        className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center hover:scale-110 transition-transform shadow-[0_0_20px_rgba(34,197,94,0.4)]"
+                        title="Accept Call"
                       >
-                        <Phone className="w-6 h-6 text-white" />
+                        <Phone className="w-5 h-5 text-white" />
                       </button>
                       <button 
                         onClick={handleEndCall}
-                        className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center hover:scale-110 transition-transform shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+                        className="w-14 h-14 rounded-full bg-red-500 flex items-center justify-center hover:scale-110 transition-transform shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+                        title="Decline/End Call"
                       >
-                        <X className="w-6 h-6 text-white" />
+                        <X className="w-5 h-5 text-white" />
                       </button>
                     </>
                   ) : (
                     <button 
                       onClick={handleEndCall}
-                      className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center hover:scale-110 transition-transform shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+                      className="w-14 h-14 rounded-full bg-red-500 flex items-center justify-center hover:scale-110 transition-transform shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+                      title="Disconnect Stream"
                     >
-                      <X className="w-6 h-6 text-white" />
+                      <X className="w-5 h-5 text-white" />
                     </button>
                   )}
                 </div>
+
               </div>
             </motion.div>
           )}
