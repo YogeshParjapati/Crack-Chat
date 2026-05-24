@@ -596,10 +596,18 @@ function ChatApp() {
 
         } catch (err: any) {
           console.error("Media & RTC Initialization Error:", err);
-          if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
-            setCallError('CAMERA/MIC ACCESS BLOCKED. PLEASE ALLOW PERMISSIONS IN BROWSER SETTINGS.');
+          const errMsg = (err?.message || err?.name || String(err)).toLowerCase();
+          if (
+            err?.name === 'NotAllowedError' || 
+            err?.name === 'PermissionDeniedError' || 
+            err?.name === 'SecurityError' ||
+            errMsg.includes('denied') || 
+            errMsg.includes('allowed') ||
+            errMsg.includes('permission')
+          ) {
+            setCallError('CAMERA/MIC ACCESS BLOCKED. BROWSER SANDBOXING PREVENTS WEBCAM/MIC USAGE INSIDE THE IFRAME. PLEASE LAUNCH CRACKCHAT IN A STANDALONE NEW TAB TO ENABLE VOICE & VIDEO CALLS!');
           } else {
-            setCallError('RTC SETUP OR HARDWARE FAILURE. VERIFY WEBCAM/MIC STATUS OR FIREWALL.');
+            setCallError('FAILED TO INITIALIZE MEDIA DEVICE: ' + (err?.message || err?.name || String(err)) + '. MAKE SURE NO OTHER APPLICATION IS USING YOUR CAMERA/MIC.');
           }
         }
       };
@@ -1839,10 +1847,18 @@ function ChatApp() {
 
                 {/* Call Error Panel */}
                 {callError && (
-                  <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-sm text-center">
+                  <div className="p-4 bg-red-950/40 border border-red-500/30 rounded-sm text-center flex flex-col items-center justify-center space-y-3">
                     <p className="text-[9px] text-red-500 font-bold uppercase tracking-wider leading-relaxed">
                       {callError}
                     </p>
+                    {callError.includes('NEW TAB') && (
+                      <button
+                        onClick={() => window.open(window.location.href, '_blank')}
+                        className="px-4 py-2 bg-[var(--crack-orange)] text-black font-mono text-[9px] font-black uppercase tracking-widest rounded-sm hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shadow-lg cursor-pointer"
+                      >
+                        Launch Standalone App
+                      </button>
+                    )}
                   </div>
                 )}
 
