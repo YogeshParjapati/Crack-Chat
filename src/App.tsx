@@ -1852,12 +1852,14 @@ function ChatApp() {
                       {callError}
                     </p>
                     {callError.includes('NEW TAB') && (
-                      <button
-                        onClick={() => window.open(window.location.href, '_blank')}
-                        className="px-4 py-2 bg-[var(--crack-orange)] text-black font-mono text-[9px] font-black uppercase tracking-widest rounded-sm hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shadow-lg cursor-pointer"
+                      <a
+                        href={window.location.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-[var(--crack-orange)] text-black font-mono text-[9px] font-black uppercase tracking-widest rounded-sm hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shadow-lg cursor-pointer text-center inline-block"
                       >
                         Launch Standalone App
-                      </button>
+                      </a>
                     )}
                   </div>
                 )}
