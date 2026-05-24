@@ -241,8 +241,12 @@ function ChatApp() {
         console.info("Info: User closed the sign-in popup.");
       } else if (errorCode === 'auth/popup-blocked') {
         setError("Sign-in popup blocked. Please allow popups for this site.");
+      } else if (errorCode === 'auth/unauthorized-domain') {
+        const errorMsg = "UNAUTHORIZED DOMAIN: Please add 'crack-chat.vercel.app' to your Firebase Auth 'Authorized domains' list in the Firebase Console.";
+        setError(errorMsg);
+        alert("Domain Unauthorized:\nTo fix Google Sign-In on Vercel, allow 'crack-chat.vercel.app' in the Firebase Console -> Authentication -> Settings -> Authorized domains.");
       } else {
-        setError("Failed to sign in with Google.");
+        setError("Failed to sign in with Google: " + (err?.message || "Unknown error"));
       }
     } finally {
       setIsAuthenticating(false);
