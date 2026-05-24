@@ -205,15 +205,20 @@ function ChatApp() {
   const [callState, setCallState] = useState<{ type: 'voice' | 'video'; status: 'calling' | 'incoming' | 'active'; peer?: string } | null>(null);
   
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [micMuted, setMicMuted] = useState(false);
   const [videoMuted, setVideoMuted] = useState(false);
   const [callError, setCallError] = useState('');
   const [volumeLevel, setVolumeLevel] = useState(0);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const isCallerRef = useRef<boolean>(false);
 
   const [onlineCount, setOnlineCount] = useState(1);
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('crackchat_is_admin') === 'true');
@@ -369,6 +374,7 @@ function ChatApp() {
       if (callDoc) {
         const data = callDoc.data();
         if (data.callerId !== userId && data.status === 'calling') {
+          isCallerRef.current = false;
           setCallState({ type: data.type, status: 'incoming', peer: data.callerName });
         } else if (data.status === 'active') {
           setCallState(prev => prev ? { ...prev, status: 'active' } : null);
@@ -383,13 +389,18 @@ function ChatApp() {
     return () => unsubscribe();
   }, [currentRoom, isJoined, userId]);
 
-  // Call Media Access Lifecycle & Web Audio API indicator
+  // Call Media Access Lifecycle, Web Audio API & WebRTC Signaling
   useEffect(() => {
     if (!callState) {
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         setLocalStream(null);
       }
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
+      }
+      setRemoteStream(null);
       setMicMuted(false);
       setVideoMuted(false);
       setCallError('');
@@ -408,8 +419,11 @@ function ChatApp() {
     const isTransmitting = callState.status === 'calling' || callState.status === 'active';
     if (isTransmitting) {
       let activeStream: MediaStream | null = null;
+      let pc: RTCPeerConnection | null = null;
+      let unsubscribeAnswer: (() => void) | null = null;
+      let unsubscribeCandidates: (() => void) | null = null;
       
-      const initializeMedia = async () => {
+      const initializeMediaAndRTC = async () => {
         try {
           setCallError('');
           const constraints = {
@@ -425,6 +439,7 @@ function ChatApp() {
           activeStream = stream;
           setLocalStream(stream);
 
+          // Web Audio visualizer setup
           try {
             const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
             if (AudioCtxClass) {
@@ -455,22 +470,155 @@ function ChatApp() {
           } catch (audioErr) {
             console.error("Audio feedback setup error:", audioErr);
           }
+
+          // WebRTC PeerConnection setup
+          const rtcConfig = {
+            iceServers: [
+              {
+                urls: [
+                  'stun:stun.l.google.com:19302',
+                  'stun:stun1.l.google.com:19302',
+                  'stun:stun2.l.google.com:19302',
+                ],
+              },
+            ],
+          };
+
+          pc = new RTCPeerConnection(rtcConfig);
+          peerConnectionRef.current = pc;
+
+          // Add tracks to PeerConnection
+          stream.getTracks().forEach(track => {
+            if (pc && activeStream) {
+              pc.addTrack(track, activeStream);
+            }
+          });
+
+          // Grab remote track
+          pc.ontrack = (event) => {
+            if (event.streams && event.streams[0]) {
+              setRemoteStream(event.streams[0]);
+            }
+          };
+
+          // ICE Candidates Gathering
+          const iceRole = isCallerRef.current ? 'callerCandidates' : 'receiverCandidates';
+          pc.onicecandidate = (event) => {
+            if (event.candidate && currentRoom) {
+              const cRef = collection(db, `rooms/${currentRoom.id}/calls/active/${iceRole}`);
+              addDoc(cRef, event.candidate.toJSON()).catch(e => {
+                console.error("Error writing ICE candidate to Firestore:", e);
+              });
+            }
+          };
+
+          const callDocRef = doc(db, `rooms/${currentRoom.id}/calls`, 'active');
+
+          if (isCallerRef.current) {
+            // CALLER FLOW
+            // 1. Create SDP Offer
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            // 2. Write Offer to Firestore Call Document
+            await setDoc(callDocRef, {
+              offer: {
+                type: offer.type,
+                sdp: offer.sdp
+              }
+            }, { merge: true });
+
+            // 3. Listen for SDP Answer from Receiver
+            unsubscribeAnswer = onSnapshot(callDocRef, async (snapshot) => {
+              const data = snapshot.data();
+              if (data && data.status === 'active' && data.answer && pc && !pc.remoteDescription) {
+                try {
+                  await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                } catch (e) {
+                  console.error("Error setting remote description on caller:", e);
+                }
+              }
+            });
+
+            // 4. Listen for Receiver's ICE Candidates
+            const rxCandidatesCol = collection(db, `rooms/${currentRoom.id}/calls/active/receiverCandidates`);
+            unsubscribeCandidates = onSnapshot(rxCandidatesCol, (snapshot) => {
+              snapshot.docChanges().forEach(async (change) => {
+                if (change.type === 'added' && pc) {
+                  const val = change.doc.data();
+                  try {
+                    await pc.addIceCandidate(new RTCIceCandidate(val));
+                  } catch (e) {
+                    console.error("Error adding receiver ICE candidate:", e);
+                  }
+                }
+              });
+            });
+
+          } else {
+            // RECEIVER FLOW (Only execute when active or accepted)
+            if (callState.status === 'active') {
+              // 1. Fetch current Caller Offer
+              const snapshot = await getDoc(callDocRef);
+              const data = snapshot.data();
+              if (data && data.offer) {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                
+                // 2. Create SDP Answer
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                // 3. Write Answer to Firestore Call Document
+                await setDoc(callDocRef, {
+                  answer: {
+                    type: answer.type,
+                    sdp: answer.sdp
+                  }
+                }, { merge: true });
+              }
+
+              // 4. Listen for Caller's ICE Candidates
+              const txCandidatesCol = collection(db, `rooms/${currentRoom.id}/calls/active/callerCandidates`);
+              unsubscribeCandidates = onSnapshot(txCandidatesCol, (snapshot) => {
+                snapshot.docChanges().forEach(async (change) => {
+                  if (change.type === 'added' && pc) {
+                    const val = change.doc.data();
+                    try {
+                      await pc.addIceCandidate(new RTCIceCandidate(val));
+                    } catch (e) {
+                      console.error("Error adding caller ICE candidate:", e);
+                    }
+                  }
+                });
+              });
+            }
+          }
+
         } catch (err: any) {
-          console.error("Hardware Device Access Error:", err);
+          console.error("Media & RTC Initialization Error:", err);
           if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
             setCallError('CAMERA/MIC ACCESS BLOCKED. PLEASE ALLOW PERMISSIONS IN BROWSER SETTINGS.');
           } else {
-            setCallError('HARDWARE DEVICE NOT FOUND OR BUSY. MAKE SURE YOUR MIC/CAMERA IS ACTIVE.');
+            setCallError('RTC SETUP OR HARDWARE FAILURE. VERIFY WEBCAM/MIC STATUS OR FIREWALL.');
           }
         }
       };
 
-      initializeMedia();
+      initializeMediaAndRTC();
 
       return () => {
         if (activeStream) {
           activeStream.getTracks().forEach(track => track.stop());
         }
+        if (pc) {
+          pc.close();
+        }
+        if (peerConnectionRef.current) {
+          peerConnectionRef.current.close();
+          peerConnectionRef.current = null;
+        }
+        if (unsubscribeAnswer) unsubscribeAnswer();
+        if (unsubscribeCandidates) unsubscribeCandidates();
         if (audioContextRef.current) {
           audioContextRef.current.close().catch(() => {});
           audioContextRef.current = null;
@@ -488,6 +636,18 @@ function ChatApp() {
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream, videoMuted]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
+
+  useEffect(() => {
+    if (remoteAudioRef.current && remoteStream) {
+      remoteAudioRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
 
   // Heartbeat for current room
   useEffect(() => {
@@ -755,8 +915,25 @@ function ChatApp() {
 
   const handleStartCall = async (type: 'voice' | 'video') => {
     if (!currentRoom) return;
+    isCallerRef.current = true;
     setCallState({ type, status: 'calling' });
     try {
+      // Clear previous candidates to avoid loading stale WebRTC candidates
+      try {
+        const callerCol = collection(db, `rooms/${currentRoom.id}/calls/active/callerCandidates`);
+        const receiverCol = collection(db, `rooms/${currentRoom.id}/calls/active/receiverCandidates`);
+        const [callerSnaps, receiverSnaps] = await Promise.all([
+          getDocs(callerCol),
+          getDocs(receiverCol)
+        ]);
+        const deletes: any[] = [];
+        callerSnaps.forEach(d => deletes.push(deleteDoc(d.ref)));
+        receiverSnaps.forEach(d => deletes.push(deleteDoc(d.ref)));
+        await Promise.all(deletes);
+      } catch (err) {
+        console.warn("Failed to clear old candidates:", err);
+      }
+
       await setDoc(doc(db, `rooms/${currentRoom.id}/calls`, 'active'), {
         type,
         status: 'calling',
@@ -771,6 +948,7 @@ function ChatApp() {
 
   const handleAcceptCall = async () => {
     if (!currentRoom) return;
+    isCallerRef.current = false;
     try {
       await setDoc(doc(db, `rooms/${currentRoom.id}/calls`, 'active'), {
         status: 'active'
@@ -1563,25 +1741,41 @@ function ChatApp() {
                 {/* Visualizer Zone */}
                 {callState.type === 'video' ? (
                   <div className="relative w-full aspect-video bg-zinc-950 border border-white/10 rounded-sm overflow-hidden flex items-center justify-center group shadow-2xl">
-                    {localStream && !videoMuted ? (
+                    {/* REMOTE STREAM (MAIN VIDEO) */}
+                    {remoteStream ? (
                       <video 
-                        ref={localVideoRef}
+                        ref={remoteVideoRef}
                         autoPlay 
                         playsInline 
-                        muted 
-                        className="w-full h-full object-cover scale-x-[-1]"
+                        className="w-full h-full object-cover"
                       />
                     ) : (
                       <div className="text-center space-y-2">
-                        <div className="w-12 h-12 mx-auto rounded-full bg-zinc-900 border border-white/5 flex items-center justify-center">
-                          <VideoOff className="w-5 h-5 text-zinc-500 animate-pulse" />
+                        <div className="w-12 h-12 mx-auto rounded-full bg-zinc-900 border border-white/5 flex items-center justify-center animate-pulse">
+                          <Loader2 className="w-5 h-5 text-[var(--crack-orange)] animate-spin" />
                         </div>
-                        <p className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">Webcam disabled or muted</p>
+                        <p className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">Awaiting remote video link...</p>
+                      </div>
+                    )}
+
+                    {/* LOCAL STREAM (FLOATING CORNER PIP) */}
+                    {localStream && !videoMuted && (
+                      <div className="absolute bottom-3 right-3 w-28 sm:w-36 aspect-video bg-black rounded border border-white/20 shadow-2xl overflow-hidden z-20">
+                        <video 
+                          ref={localVideoRef}
+                          autoPlay 
+                          playsInline 
+                          muted 
+                          className="w-full h-full object-cover scale-x-[-1]"
+                        />
+                        <div className="absolute bottom-1 left-1.5 text-[6px] font-mono uppercase bg-black/60 px-1 py-0.5 rounded text-white font-bold">
+                          YOU
+                        </div>
                       </div>
                     )}
 
                     {/* Left corner mini info overlay */}
-                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-sm border border-white/5 flex items-center space-x-1.5 font-mono shadow">
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-sm border border-white/5 flex items-center space-x-1.5 font-mono shadow z-10">
                       <span className="w-1.5 h-1.5 rounded-full bg-[var(--crack-orange)] animate-ping" />
                       <span className="text-[7px] font-bold uppercase tracking-wider text-white">
                         {callState.status} • LOCAL
@@ -1590,7 +1784,7 @@ function ChatApp() {
 
                     {/* Mic feedback sound level in the stream layout */}
                     {localStream && !micMuted && (
-                      <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-sm border border-white/5 flex items-center space-x-2 shadow max-w-[120px] w-full">
+                      <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-sm border border-white/5 flex items-center space-x-2 shadow max-w-[120px] w-full z-10">
                         <Mic className="w-3 h-3 text-[var(--crack-orange)] animate-pulse" />
                         <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
                           <div 
@@ -1712,6 +1906,9 @@ function ChatApp() {
                     </button>
                   )}
                 </div>
+
+                {/* Invisible audio element to play remote stream audio */}
+                <audio ref={remoteAudioRef} autoPlay style={{ display: 'none' }} />
 
               </div>
             </motion.div>
