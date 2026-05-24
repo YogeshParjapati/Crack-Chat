@@ -19,7 +19,6 @@ import {
   limit,
   deleteDoc
 } from 'firebase/firestore';
-import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from './firebase';
 
 interface Message {
@@ -163,7 +162,14 @@ function ChatApp() {
     return () => clearInterval(interval);
   }, [isBooting]);
 
-  const [userId, setUserId] = useState(() => localStorage.getItem('crackchat_userid') || '');
+  const [userId, setUserId] = useState(() => {
+    let id = localStorage.getItem('crackchat_userid');
+    if (!id) {
+      id = 'usr_' + Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('crackchat_userid', id);
+    }
+    return id;
+  });
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [username, setUsername] = useState(localStorage.getItem('crackchat_username') || '');
@@ -198,69 +204,12 @@ function ChatApp() {
   const [replyTo, setReplyTo] = useState<{ text: string; sender: string } | null>(null);
   const [callState, setCallState] = useState<{ type: 'voice' | 'video'; status: 'calling' | 'incoming' | 'active'; peer?: string } | null>(null);
   const [onlineCount, setOnlineCount] = useState(1);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('crackchat_is_admin') === 'true');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [allRoomsPresence, setAllRoomsPresence] = useState<any[]>([]);
   const [adminActiveTab, setAdminActiveTab] = useState<'members' | 'rooms'>('members');
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-
-  // Firebase Auth
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserId(user.uid);
-        localStorage.setItem('crackchat_userid', user.uid);
-        // Auto-admin if email matches
-        if (user.email === 'yy2561171@gmail.com') {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
-      } else {
-        // We don't auto-login anonymously anymore because it's restricted
-        setUserId(localStorage.getItem('crackchat_userid') || '');
-        setIsAdmin(false);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const handleGoogleSignIn = async () => {
-    if (isAuthenticating) return;
-    setIsAuthenticating(true);
-    setError('');
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (err: any) {
-      console.error("Google Sign-In Error:", err);
-      const errorCode = err?.code;
-      if (errorCode === 'auth/cancelled-popup-request') {
-        console.warn("Benign: Google Sign-in popup request was cancelled.");
-      } else if (errorCode === 'auth/popup-closed-by-user') {
-        console.info("Info: User closed the sign-in popup.");
-      } else if (errorCode === 'auth/popup-blocked') {
-        setError("Sign-in popup blocked. Please allow popups for this site.");
-      } else if (errorCode === 'auth/unauthorized-domain') {
-        const errorMsg = "UNAUTHORIZED DOMAIN: Please add 'crack-chat.vercel.app' to your Firebase Auth 'Authorized domains' list in the Firebase Console.";
-        setError(errorMsg);
-        alert("Domain Unauthorized:\nTo fix Google Sign-In on Vercel, allow 'crack-chat.vercel.app' in the Firebase Console -> Authentication -> Settings -> Authorized domains.");
-      } else {
-        setError("Failed to sign in with Google: " + (err?.message || "Unknown error"));
-      }
-    } finally {
-      setIsAuthenticating(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-      setIsAdmin(false);
-    } catch (err) {
-      console.error("Sign-Out Error:", err);
-    }
-  };
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState('');
 
   // Admin Presence Listener
   useEffect(() => {
@@ -1023,9 +972,6 @@ function ChatApp() {
           setShowThemePicker={setShowThemePicker}
           roomSearch={roomSearch}
           setRoomSearch={setRoomSearch}
-          onGoogleSignIn={handleGoogleSignIn}
-          onSignOut={handleSignOut}
-          isAuthenticating={isAuthenticating}
         />
       </div>
 
@@ -1058,9 +1004,6 @@ function ChatApp() {
                 roomSearch={roomSearch}
                 setRoomSearch={setRoomSearch}
                 onClose={() => setShowMobileSidebar(false)}
-                onGoogleSignIn={handleGoogleSignIn}
-                onSignOut={handleSignOut}
-                isAuthenticating={isAuthenticating}
               />
             </motion.div>
           </>
@@ -1555,45 +1498,62 @@ function ChatApp() {
               </div>
 
               {!isAdmin ? (
-                <div className="space-y-6 flex-1 flex flex-col justify-center items-center text-center p-4">
-                  <AlertTriangle className="w-12 h-12 text-[#ef4444] animate-pulse mb-2" />
-                  <h3 className="text-sm font-black uppercase tracking-widest text-[#ef4444]">Access Restricted</h3>
-                  <p className="text-xs text-zinc-500 leading-relaxed max-w-xs mt-2 font-black tracking-tight">
-                    This admin console is strictly reserved for Google account <span className="text-white font-mono break-all font-bold">yy2561171@gmail.com</span>. No other credentials, accounts, or emails are permitted.
-                  </p>
-                  {!auth.currentUser ? (
-                    <button 
-                      onClick={handleGoogleSignIn}
-                      disabled={isAuthenticating}
-                      className={cn(
-                        "mt-6 w-full bg-white text-black font-black uppercase py-3 text-xs tracking-widest hover:bg-zinc-200 transition-all flex items-center justify-center space-x-2",
-                        isAuthenticating && "opacity-50 pointer-events-none"
-                      )}
-                    >
-                      {isAuthenticating ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin text-[var(--crack-orange)]" />
-                          <span>Authenticating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="w-4 h-4 fill-current text-[var(--crack-orange)]" />
-                          <span>Authenticate</span>
-                        </>
-                      )}
-                    </button>
-                  ) : (
-                    <p className="mt-4 text-[10px] text-zinc-500 font-mono">
-                      Currently signed in as: <br />
-                      <span className="text-zinc-400 break-all">{auth.currentUser.email}</span>
+                <div className="space-y-6 flex-1 flex flex-col justify-center p-4">
+                  <div className="text-center">
+                    <Shield className="w-12 h-12 text-[#ef4444] animate-pulse mb-3 mx-auto" />
+                    <h3 className="text-xs font-black uppercase tracking-widest text-[#ef4444]">Terminal Locked</h3>
+                    <p className="text-[9px] text-zinc-500 max-w-xs mt-2 font-bold tracking-tight uppercase leading-relaxed mx-auto">
+                      Please enter the administrator security key to unlock management controls.
                     </p>
-                  )}
+                  </div>
+                  
+                  <form 
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setAdminError('');
+                      
+                      const correctPass = (import.meta as any).env?.VITE_ADMIN_PASSWORD || "crackadmin";
+                      if (adminPassword === correctPass) {
+                        setIsAdmin(true);
+                        localStorage.setItem('crackchat_is_admin', 'true');
+                        setAdminPassword('');
+                      } else {
+                        setAdminError('ACCESS DENIED: INVALID KEY');
+                      }
+                    }}
+                    className="space-y-4"
+                  >
+                    <div className="space-y-1">
+                      <label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest">Admin Passcode</label>
+                      <input 
+                        type="password"
+                        placeholder="ENTER PASSWORD..."
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 p-2.5 text-xs tracking-widest font-mono text-center focus:outline-none focus:border-[var(--crack-orange)] transition-colors text-white uppercase rounded-sm"
+                      />
+                    </div>
+
+                    {adminError && (
+                      <p className="text-[9px] text-red-500 text-center font-black tracking-widest uppercase font-mono animate-pulse">
+                        {adminError}
+                      </p>
+                    )}
+
+                    <button 
+                      type="submit"
+                      className="w-full bg-white text-black font-black uppercase py-2.5 text-[10px] tracking-widest hover:bg-[var(--crack-orange)] hover:text-black transition-all flex items-center justify-center space-x-2"
+                    >
+                      <Unlock className="w-3 h-3" />
+                      <span>AUTHORIZE</span>
+                    </button>
+                  </form>
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col min-h-0">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[9px] text-[#ef4444] uppercase font-black tracking-widest font-mono">SYS_ADMIN_CONSOLE</span>
-                    <button onClick={() => setIsAdmin(false)} className="text-[10px] text-zinc-500 hover:text-red-500 uppercase font-bold transition-colors">Logout</button>
+                    <button onClick={() => { setIsAdmin(false); localStorage.removeItem('crackchat_is_admin'); }} className="text-[10px] text-zinc-500 hover:text-red-500 uppercase font-bold transition-colors">Logout</button>
                   </div>
 
                   {/* Admin Glass Tabs */}
@@ -1732,10 +1692,7 @@ function SidebarContent({
   setShowThemePicker,
   roomSearch,
   setRoomSearch,
-  onClose,
-  onGoogleSignIn,
-  onSignOut,
-  isAuthenticating
+  onClose
 }: { 
   rooms: Room[], 
   currentRoom: Room | null, 
@@ -1747,13 +1704,8 @@ function SidebarContent({
   setShowThemePicker: (val: boolean) => void,
   roomSearch: string,
   setRoomSearch: (val: string) => void,
-  onClose?: () => void,
-  onGoogleSignIn: () => void,
-  onSignOut: () => void,
-  isAuthenticating?: boolean
+  onClose?: () => void
 }) {
-  const user = auth.currentUser;
-
   return (
     <>
       <div className="flex items-center justify-between">
@@ -1771,43 +1723,6 @@ function SidebarContent({
       </div>
       
       <div className="space-y-4 flex-1 overflow-y-auto scrollbar-hide">
-        {!user ? (
-          <button 
-            onClick={onGoogleSignIn}
-            disabled={isAuthenticating}
-            className={cn(
-              "w-full bg-white text-black font-black uppercase py-2 text-[10px] tracking-widest hover:bg-zinc-200 transition-all flex items-center justify-center space-x-2",
-              isAuthenticating && "opacity-50 pointer-events-none"
-            )}
-          >
-            {isAuthenticating ? (
-              <>
-                <Loader2 className="w-3 h-3 animate-spin text-[var(--crack-orange)]" />
-                <span>Authenticating...</span>
-              </>
-            ) : (
-              <>
-                <Zap className="w-3 h-3 fill-current" />
-                <span>Sign In with Google</span>
-              </>
-            )}
-          </button>
-        ) : (
-          <div className="p-3 bg-white/5 border border-white/10 rounded-sm space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[8px] text-zinc-500 uppercase font-black tracking-widest">Authenticated</span>
-              <button onClick={onSignOut} className="text-[8px] text-red-500 hover:text-red-400 uppercase font-black">Sign Out</button>
-            </div>
-            <div className="flex items-center space-x-2">
-              <img src={user.photoURL || ''} alt="" className="w-5 h-5 rounded-full border border-white/10" referrerPolicy="no-referrer" />
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] font-bold text-white truncate">{user.displayName}</span>
-                <span className="text-[8px] text-zinc-500 truncate">{user.email}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="flex items-center justify-between">
           <div className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Active Rooms</div>
           <button onClick={() => setIsJoined(false)} className="text-[10px] text-zinc-500 hover:text-white uppercase font-black transition-colors">Switch</button>
