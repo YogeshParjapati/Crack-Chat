@@ -911,11 +911,13 @@ function ChatApp() {
           peerConnectionRef.current = pc;
 
           // Add tracks to PeerConnection
-          localStream.getTracks().forEach(track => {
-            if (pc) {
-              pc.addTrack(track, localStream);
-            }
-          });
+          if (activeStream) {
+            activeStream.getTracks().forEach(track => {
+              if (pc && activeStream) {
+                pc.addTrack(track, activeStream);
+              }
+            });
+          }
 
           // Grab remote track safely
           pc.ontrack = (event) => {
@@ -981,25 +983,30 @@ function ChatApp() {
           } else {
             // RECEIVER FLOW (Only execute when active or accepted)
             if (callState.status === 'active') {
-              // 1. Fetch current Caller Offer
-              const snapshot = await getDoc(callDocRef);
-              const data = snapshot.data();
-              if (data && data.offer && pc) {
-                await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-                await processCandidateQueue();
-                
-                // 2. Create SDP Answer
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
+              // 1. Listen dynamically for the Caller's SDP offer, avoiding race conditions if media initialization takes time
+              unsubscribeAnswer = onSnapshot(callDocRef, async (snapshot) => {
+                const data = snapshot.data();
+                if (data && data.offer && pc && !pc.remoteDescription) {
+                  try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    await processCandidateQueue();
+                    
+                    // 2. Create SDP Answer
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
 
-                // 3. Write Answer to Firestore Call Document
-                await setDoc(callDocRef, {
-                  answer: {
-                    type: answer.type,
-                    sdp: answer.sdp
+                    // 3. Write Answer to Firestore Call Document
+                    await setDoc(callDocRef, {
+                      answer: {
+                        type: answer.type,
+                        sdp: answer.sdp
+                      }
+                    }, { merge: true });
+                  } catch (e) {
+                    console.error("Error setting remote description/answer on receiver:", e);
                   }
-                }, { merge: true });
-              }
+                }
+              });
 
               // 4. Listen for Caller's ICE Candidates with ID isolation
               const txCandidatesCol = collection(db, `rooms/${currentRoom.id}/calls/active/callerCandidates`);
