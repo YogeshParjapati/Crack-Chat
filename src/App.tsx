@@ -2059,8 +2059,9 @@ function ChatApp() {
                       e.preventDefault();
                       setAdminError('');
                       
-                      const correctPass = (import.meta as any).env?.VITE_ADMIN_PASSWORD || "crackadmin";
-                      if (adminPassword === correctPass) {
+                      const correctPass = import.meta.env.VITE_ADMIN_PASSWORD || "crackadmin";
+                      const enteredPass = adminPassword.trim();
+                      if (enteredPass === correctPass || enteredPass.toLowerCase() === correctPass.toLowerCase()) {
                         setIsAdmin(true);
                         localStorage.setItem('crackchat_is_admin', 'true');
                         setAdminPassword('');
@@ -2077,7 +2078,7 @@ function ChatApp() {
                         placeholder="ENTER PASSWORD..."
                         value={adminPassword}
                         onChange={(e) => setAdminPassword(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 p-2.5 text-xs tracking-widest font-mono text-center focus:outline-none focus:border-[var(--crack-orange)] transition-colors text-white uppercase rounded-sm"
+                        className="w-full bg-white/5 border border-white/10 p-2.5 text-xs tracking-widest font-mono text-center focus:outline-none focus:border-[var(--crack-orange)] transition-colors text-white rounded-sm"
                       />
                     </div>
 
