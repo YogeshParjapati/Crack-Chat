@@ -365,6 +365,130 @@ const generateSynthVoiceNote = async (): Promise<string> => {
   });
 };
 
+const createVirtualMediaStream = (withVideo: boolean): MediaStream => {
+  const tracks: MediaStreamTrack[] = [];
+
+  // Generate synthetic audio track
+  try {
+    const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtxClass) {
+      const audioCtx = new AudioCtxClass();
+      const dest = audioCtx.createMediaStreamDestination();
+      
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, 0); 
+      osc.frequency.linearRampToValueAtTime(110, 5); 
+      
+      gain.gain.setValueAtTime(0.01, 0); 
+      
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start();
+      
+      const audioTrack = dest.stream.getAudioTracks()[0];
+      if (audioTrack) {
+        tracks.push(audioTrack);
+      }
+    }
+  } catch (e) {
+    console.error("Virtual audio track error:", e);
+  }
+
+  // Generate synthetic animated video track (cyber code flow / pulse grid pattern on canvas)
+  if (withVideo) {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        let frameCount = 0;
+        const draw = () => {
+          frameCount++;
+          // Draw cyber backdrop
+          ctx.fillStyle = '#060606';
+          ctx.fillRect(0, 0, 640, 480);
+          
+          // Draw scanning grids
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(249, 115, 22, 0.08)';
+          for (let x = 0; x < 640; x += 40) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, 480);
+            ctx.stroke();
+          }
+          for (let y = 0; y < 480; y += 40) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(640, y);
+            ctx.stroke();
+          }
+          
+          // Outer border
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = '#ef4444'; // Cyber Red
+          ctx.strokeRect(10, 10, 620, 460);
+          
+          // Pulsating audio visualizer bars at the bottom
+          ctx.fillStyle = 'rgba(249, 115, 22, 0.6)';
+          for (let i = 0; i < 20; i++) {
+            const h = 50 + Math.sin(frameCount * 0.15 + i) * 30 + Math.random() * 15;
+            ctx.fillRect(50 + i * 27, 440 - h, 16, h);
+          }
+          
+          // "VIRTUAL SIGNAL TRANSMITTING..." overlay
+          ctx.fillStyle = '#ef4444';
+          ctx.font = "bold 14px 'JetBrains Mono', monospace";
+          ctx.fillText("🔴 [SANDBOX VIRTUAL FEED] CRACKCHAT TRANSMITTING...", 30, 45);
+          
+          ctx.fillStyle = '#ffffff';
+          ctx.font = "12px 'JetBrains Mono', monospace";
+          ctx.fillText(`SIGNAL RESOLUTION: 640x480px @ 30FPS`, 30, 68);
+          ctx.fillText(`DECODED STREAM TYPE: SYNTHETIC SIMULATION`, 30, 88);
+          ctx.fillText(`TIME CODE: ${new Date().toISOString()}`, 30, 108);
+
+          // Render rotating virtual wireframe avatar
+          ctx.translate(320, 240);
+          ctx.rotate(frameCount * 0.02);
+          ctx.strokeStyle = 'rgba(249, 115, 22, 0.4)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 80 + Math.sin(frameCount * 0.1) * 10, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          ctx.beginPath();
+          ctx.moveTo(-60, -60);
+          ctx.lineTo(60, 60);
+          ctx.moveTo(60, -60);
+          ctx.lineTo(-60, 60);
+          ctx.stroke();
+          ctx.setTransform(1, 0, 0, 1, 0, 0); // reset
+
+          requestAnimationFrame(draw);
+        };
+        // start animation loop
+        draw();
+        
+        const canvasStream = (canvas as any).captureStream ? (canvas as any).captureStream(30) : (canvas as any).webkitCaptureStream ? (canvas as any).webkitCaptureStream(30) : null;
+        if (canvasStream) {
+          const videoTrack = canvasStream.getVideoTracks()[0];
+          if (videoTrack) {
+            tracks.push(videoTrack);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Virtual video track error:", e);
+    }
+  }
+
+  return new MediaStream(tracks);
+};
+
 interface VoiceNotePlayerProps {
   url: string;
 }
@@ -558,13 +682,14 @@ function ChatApp() {
   const [roomSearch, setRoomSearch] = useState('');
   const [replyTo, setReplyTo] = useState<{ text: string; sender: string } | null>(null);
   const [fullscreenMedia, setFullscreenMedia] = useState<{ url: string; type: 'image' | 'video' | 'gif' | 'sticker' } | null>(null);
-  const [callState, setCallState] = useState<{ type: 'voice' | 'video'; status: 'calling' | 'incoming' | 'active'; peer?: string } | null>(null);
+  const [callState, setCallState] = useState<{ type: 'voice' | 'video'; status: 'calling' | 'incoming' | 'active'; peer?: string; callId?: string } | null>(null);
   
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [micMuted, setMicMuted] = useState(false);
   const [videoMuted, setVideoMuted] = useState(false);
   const [callError, setCallError] = useState('');
+  const [usingVirtualCallStream, setUsingVirtualCallStream] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
 
   // Voice recording states & refs
@@ -864,9 +989,9 @@ function ChatApp() {
         const data = callDoc.data();
         if (data.callerId !== userId && data.status === 'calling') {
           isCallerRef.current = false;
-          setCallState({ type: data.type, status: 'incoming', peer: data.callerName });
+          setCallState({ type: data.type, status: 'incoming', peer: data.callerName, callId: data.callId });
         } else if (data.status === 'active') {
-          setCallState(prev => prev ? { ...prev, status: 'active' } : null);
+          setCallState(prev => prev ? { ...prev, status: 'active', callId: data.callId } : null);
         } else if (data.status === 'ended') {
           setCallState(null);
         }
@@ -877,6 +1002,8 @@ function ChatApp() {
 
     return () => unsubscribe();
   }, [currentRoom, isJoined, userId]);
+
+  const isCallTransmitting = callState ? (callState.status === 'calling' || callState.status === 'active') : false;
 
   // Call Media Access Lifecycle, Web Audio API & WebRTC Signaling
   useEffect(() => {
@@ -893,6 +1020,7 @@ function ChatApp() {
       setMicMuted(false);
       setVideoMuted(false);
       setCallError('');
+      setUsingVirtualCallStream(false);
       setVolumeLevel(0);
       if (audioContextRef.current) {
         audioContextRef.current.close().catch(() => {});
@@ -905,26 +1033,66 @@ function ChatApp() {
       return;
     }
 
-    const isTransmitting = callState.status === 'calling' || callState.status === 'active';
-    if (isTransmitting) {
+    if (isCallTransmitting) {
       let activeStream: MediaStream | null = null;
       let pc: RTCPeerConnection | null = null;
       let unsubscribeAnswer: (() => void) | null = null;
       let unsubscribeCandidates: (() => void) | null = null;
       
+      const candidateQueue: any[] = [];
+
+      const addOrQueueCandidate = async (candidateData: any) => {
+        if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidateData));
+          } catch (e) {
+            console.error("Error adding ICE candidate:", e);
+          }
+        } else {
+          candidateQueue.push(candidateData);
+        }
+      };
+
+      const processCandidateQueue = async () => {
+        while (candidateQueue.length > 0) {
+          const cand = candidateQueue.shift();
+          if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (e) {
+              console.error("Error adding queued ICE candidate:", e);
+            }
+          }
+        }
+      };
+
       const initializeMediaAndRTC = async () => {
         try {
           setCallError('');
-          const constraints = {
-            audio: true,
-            video: callState.type === 'video' ? {
-              width: { ideal: 640 },
-              height: { ideal: 480 },
-              facingMode: 'user'
-            } : false
-          };
+          let stream: MediaStream;
           
-          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          if (usingVirtualCallStream) {
+            stream = createVirtualMediaStream(callState.type === 'video');
+          } else {
+            const constraints = {
+              audio: true,
+              video: callState.type === 'video' ? {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: 'user'
+              } : false
+            };
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+          }
+
+          // Apply existing mute settings in case we pre-muted or toggled
+          stream.getAudioTracks().forEach(track => {
+            track.enabled = !micMuted;
+          });
+          stream.getVideoTracks().forEach(track => {
+            track.enabled = !videoMuted;
+          });
+          
           activeStream = stream;
           setLocalStream(stream);
 
@@ -983,19 +1151,35 @@ function ChatApp() {
             }
           });
 
-          // Grab remote track
+          // Grab remote track safely
           pc.ontrack = (event) => {
             if (event.streams && event.streams[0]) {
               setRemoteStream(event.streams[0]);
+            } else {
+              setRemoteStream(prev => {
+                if (prev) {
+                  if (!prev.getTracks().some(t => t.id === event.track.id)) {
+                    prev.addTrack(event.track);
+                  }
+                  return new MediaStream(prev.getTracks());
+                } else {
+                  const ms = new MediaStream();
+                  ms.addTrack(event.track);
+                  return ms;
+                }
+              });
             }
           };
 
           // ICE Candidates Gathering
           const iceRole = isCallerRef.current ? 'callerCandidates' : 'receiverCandidates';
           pc.onicecandidate = (event) => {
-            if (event.candidate && currentRoom) {
+            if (event.candidate && currentRoom && callState.callId) {
               const cRef = collection(db, `rooms/${currentRoom.id}/calls/active/${iceRole}`);
-              addDoc(cRef, event.candidate.toJSON()).catch(e => {
+              addDoc(cRef, {
+                ...event.candidate.toJSON(),
+                callId: callState.callId
+              }).catch(e => {
                 console.error("Error writing ICE candidate to Firestore:", e);
               });
             }
@@ -1023,22 +1207,21 @@ function ChatApp() {
               if (data && data.status === 'active' && data.answer && pc && !pc.remoteDescription) {
                 try {
                   await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                  await processCandidateQueue();
                 } catch (e) {
                   console.error("Error setting remote description on caller:", e);
                 }
               }
             });
 
-            // 4. Listen for Receiver's ICE Candidates
+            // 4. Listen for Receiver's ICE Candidates with ID isolation
             const rxCandidatesCol = collection(db, `rooms/${currentRoom.id}/calls/active/receiverCandidates`);
             unsubscribeCandidates = onSnapshot(rxCandidatesCol, (snapshot) => {
               snapshot.docChanges().forEach(async (change) => {
                 if (change.type === 'added' && pc) {
                   const val = change.doc.data();
-                  try {
-                    await pc.addIceCandidate(new RTCIceCandidate(val));
-                  } catch (e) {
-                    console.error("Error adding receiver ICE candidate:", e);
+                  if (val.callId === callState.callId) {
+                    await addOrQueueCandidate(val);
                   }
                 }
               });
@@ -1052,6 +1235,7 @@ function ChatApp() {
               const data = snapshot.data();
               if (data && data.offer) {
                 await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                await processCandidateQueue();
                 
                 // 2. Create SDP Answer
                 const answer = await pc.createAnswer();
@@ -1066,16 +1250,14 @@ function ChatApp() {
                 }, { merge: true });
               }
 
-              // 4. Listen for Caller's ICE Candidates
+              // 4. Listen for Caller's ICE Candidates with ID isolation
               const txCandidatesCol = collection(db, `rooms/${currentRoom.id}/calls/active/callerCandidates`);
               unsubscribeCandidates = onSnapshot(txCandidatesCol, (snapshot) => {
                 snapshot.docChanges().forEach(async (change) => {
                   if (change.type === 'added' && pc) {
                     const val = change.doc.data();
-                    try {
-                      await pc.addIceCandidate(new RTCIceCandidate(val));
-                    } catch (e) {
-                      console.error("Error adding caller ICE candidate:", e);
+                    if (val.callId === callState.callId) {
+                      await addOrQueueCandidate(val);
                     }
                   }
                 });
@@ -1126,7 +1308,7 @@ function ChatApp() {
         }
       };
     }
-  }, [callState?.status, callState?.type]);
+  }, [isCallTransmitting, callState?.type, usingVirtualCallStream]);
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
@@ -1413,7 +1595,8 @@ function ChatApp() {
   const handleStartCall = async (type: 'voice' | 'video') => {
     if (!currentRoom) return;
     isCallerRef.current = true;
-    setCallState({ type, status: 'calling' });
+    const uniqueCallId = Math.random().toString(36).substring(2, 15);
+    setCallState({ type, status: 'calling', callId: uniqueCallId });
     try {
       // Clear previous candidates to avoid loading stale WebRTC candidates
       try {
@@ -1436,7 +1619,8 @@ function ChatApp() {
         status: 'calling',
         callerId: userId,
         callerName: username,
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
+        callId: uniqueCallId
       });
     } catch (error) {
       console.error("Failed to start call", error);
@@ -2628,16 +2812,28 @@ function ChatApp() {
                     <p className="text-[9px] text-red-500 font-bold uppercase tracking-wider leading-relaxed">
                       {callError}
                     </p>
-                    {callError.includes('NEW TAB') && (
-                      <a
-                        href={window.location.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-[var(--crack-orange)] text-black font-mono text-[9px] font-black uppercase tracking-widest rounded-sm hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shadow-lg cursor-pointer text-center inline-block"
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCallError('');
+                          setUsingVirtualCallStream(true);
+                        }}
+                        className="px-4 py-2 bg-[var(--crack-orange)] text-black font-mono text-[9px] font-black uppercase tracking-widest rounded-sm hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shadow-lg cursor-pointer text-center inline-block font-bold"
                       >
-                        Launch Standalone App
-                      </a>
-                    )}
+                        📶 Bypass with Virtual Cyber Feed
+                      </button>
+                      {callError.includes('NEW TAB') && (
+                        <a
+                          href={window.location.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-zinc-850 text-white border border-zinc-700 hover:border-zinc-500 font-mono text-[9px] font-black uppercase tracking-widest rounded-sm hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shadow-lg cursor-pointer text-center inline-block"
+                        >
+                          Launch Standalone App
+                        </a>
+                      )}
+                    </div>
                   </div>
                 )}
 
