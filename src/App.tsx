@@ -294,211 +294,6 @@ function writeString(view: DataView, offset: number, string: string) {
   }
 }
 
-const generateSynthVoiceNote = async (): Promise<string> => {
-  const sampleRate = 44100;
-  const duration = 3.5;
-  const ctx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(1, sampleRate * duration, sampleRate);
-  
-  const osc = ctx.createOscillator();
-  const filter = ctx.createBiquadFilter();
-  const gain = ctx.createGain();
-  
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(120, 0);
-  osc.frequency.exponentialRampToValueAtTime(85, duration);
-  
-  const lfo = ctx.createOscillator();
-  const lfoGain = ctx.createGain();
-  lfo.frequency.value = 6.0;
-  lfoGain.gain.value = 20;
-  
-  lfo.connect(lfoGain);
-  lfoGain.connect(osc.frequency);
-  
-  filter.type = 'bandpass';
-  filter.Q.value = 4.0;
-  filter.frequency.setValueAtTime(550, 0);
-  filter.frequency.exponentialRampToValueAtTime(320, duration);
-  
-  const beepOsc = ctx.createOscillator();
-  const beepGain = ctx.createGain();
-  beepOsc.type = 'sine';
-  beepOsc.frequency.setValueAtTime(640, 0.4);
-  beepOsc.frequency.setValueAtTime(960, 0.7);
-  beepOsc.frequency.setValueAtTime(1280, 1.0);
-  beepOsc.frequency.exponentialRampToValueAtTime(80, 2.5);
-  
-  beepGain.gain.setValueAtTime(0, 0);
-  beepGain.gain.linearRampToValueAtTime(0.06, 0.4);
-  beepGain.gain.exponentialRampToValueAtTime(0.001, 2.5);
-  
-  osc.connect(filter);
-  filter.connect(gain);
-  
-  beepOsc.connect(beepGain);
-  beepGain.connect(ctx.destination);
-  
-  gain.gain.setValueAtTime(0, 0);
-  gain.gain.linearRampToValueAtTime(0.3, 0.1);
-  gain.gain.linearRampToValueAtTime(0.2, duration - 0.4);
-  gain.gain.exponentialRampToValueAtTime(0.001, duration);
-  
-  gain.connect(ctx.destination);
-  
-  osc.start(0);
-  lfo.start(0);
-  beepOsc.start(0.4);
-  
-  osc.stop(duration);
-  lfo.stop(duration);
-  beepOsc.stop(2.5);
-  
-  const renderedBuffer = await ctx.startRendering();
-  const wavBlob = audioBufferToWav(renderedBuffer);
-  
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      resolve(reader.result as string);
-    };
-    reader.readAsDataURL(wavBlob);
-  });
-};
-
-const createVirtualMediaStream = (withVideo: boolean): MediaStream => {
-  const tracks: MediaStreamTrack[] = [];
-
-  // Generate synthetic audio track
-  try {
-    const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioCtxClass) {
-      const audioCtx = new AudioCtxClass();
-      const dest = audioCtx.createMediaStreamDestination();
-      
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(150, 0); 
-      
-      // Infinite slow natural line hum drift (between 140Hz and 160Hz)
-      let t = 0;
-      setInterval(() => {
-        try {
-          if (audioCtx.state !== 'closed') {
-            t += 0.5;
-            osc.frequency.setValueAtTime(150 + Math.sin(t) * 10, audioCtx.currentTime);
-          }
-        } catch (e) {}
-      }, 500);
-      
-      gain.gain.setValueAtTime(0.005, 0); 
-      
-      osc.connect(gain);
-      gain.connect(dest);
-      osc.start();
-      
-      const audioTrack = dest.stream.getAudioTracks()[0];
-      if (audioTrack) {
-        tracks.push(audioTrack);
-      }
-    }
-  } catch (e) {
-    console.error("Virtual audio track error:", e);
-  }
-
-  // Generate synthetic animated video track (cyber code flow / pulse grid pattern on canvas)
-  if (withVideo) {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 640;
-      canvas.height = 480;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        let frameCount = 0;
-        const draw = () => {
-          frameCount++;
-          // Draw cyber backdrop
-          ctx.fillStyle = '#060606';
-          ctx.fillRect(0, 0, 640, 480);
-          
-          // Draw scanning grids
-          ctx.lineWidth = 1;
-          ctx.strokeStyle = 'rgba(249, 115, 22, 0.08)';
-          for (let x = 0; x < 640; x += 40) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, 480);
-            ctx.stroke();
-          }
-          for (let y = 0; y < 480; y += 40) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(640, y);
-            ctx.stroke();
-          }
-          
-          // Outer border
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = '#ef4444'; // Cyber Red
-          ctx.strokeRect(10, 10, 620, 460);
-          
-          // Pulsating audio visualizer bars at the bottom
-          ctx.fillStyle = 'rgba(249, 115, 22, 0.6)';
-          for (let i = 0; i < 20; i++) {
-            const h = 50 + Math.sin(frameCount * 0.15 + i) * 30 + Math.random() * 15;
-            ctx.fillRect(50 + i * 27, 440 - h, 16, h);
-          }
-          
-          // "VIRTUAL SIGNAL TRANSMITTING..." overlay
-          ctx.fillStyle = '#ef4444';
-          ctx.font = "bold 14px 'JetBrains Mono', monospace";
-          ctx.fillText("🔴 [SANDBOX VIRTUAL FEED] CRACKCHAT TRANSMITTING...", 30, 45);
-          
-          ctx.fillStyle = '#ffffff';
-          ctx.font = "12px 'JetBrains Mono', monospace";
-          ctx.fillText(`SIGNAL RESOLUTION: 640x480px @ 30FPS`, 30, 68);
-          ctx.fillText(`DECODED STREAM TYPE: SYNTHETIC SIMULATION`, 30, 88);
-          ctx.fillText(`TIME CODE: ${new Date().toISOString()}`, 30, 108);
-
-          // Render rotating virtual wireframe avatar
-          ctx.translate(320, 240);
-          ctx.rotate(frameCount * 0.02);
-          ctx.strokeStyle = 'rgba(249, 115, 22, 0.4)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(0, 0, 80 + Math.sin(frameCount * 0.1) * 10, 0, Math.PI * 2);
-          ctx.stroke();
-          
-          ctx.beginPath();
-          ctx.moveTo(-60, -60);
-          ctx.lineTo(60, 60);
-          ctx.moveTo(60, -60);
-          ctx.lineTo(-60, 60);
-          ctx.stroke();
-          ctx.setTransform(1, 0, 0, 1, 0, 0); // reset
-
-          requestAnimationFrame(draw);
-        };
-        // start animation loop
-        draw();
-        
-        const canvasStream = (canvas as any).captureStream ? (canvas as any).captureStream(30) : (canvas as any).webkitCaptureStream ? (canvas as any).webkitCaptureStream(30) : null;
-        if (canvasStream) {
-          const videoTrack = canvasStream.getVideoTracks()[0];
-          if (videoTrack) {
-            tracks.push(videoTrack);
-          }
-        }
-      }
-    } catch (e) {
-      console.error("Virtual video track error:", e);
-    }
-  }
-
-  return new MediaStream(tracks);
-};
-
 interface VoiceNotePlayerProps {
   url: string;
 }
@@ -699,12 +494,10 @@ function ChatApp() {
   const [micMuted, setMicMuted] = useState(false);
   const [videoMuted, setVideoMuted] = useState(false);
   const [callError, setCallError] = useState('');
-  const [usingVirtualCallStream, setUsingVirtualCallStream] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
 
   // Voice recording states & refs
   const [isRecording, setIsRecording] = useState(false);
-  const [isVirtualRecording, setIsVirtualRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [voiceNoteError, setVoiceNoteError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -813,46 +606,7 @@ function ChatApp() {
     setIsRecording(false);
   };
 
-  const startVirtualRecording = () => {
-    setVoiceNoteError(null);
-    setIsVirtualRecording(true);
-    setRecordingDuration(0);
 
-    const interval = setInterval(() => {
-      setRecordingDuration(prev => {
-        if (prev >= 6) { // Automatically stops and transmits at 6 seconds
-          stopVirtualRecording(true);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 1000);
-    recordingIntervalRef.current = interval;
-  };
-
-  const stopVirtualRecording = async (shouldSend: boolean) => {
-    if (recordingIntervalRef.current) {
-      clearInterval(recordingIntervalRef.current as any);
-      recordingIntervalRef.current = null;
-    }
-    setIsVirtualRecording(false);
-
-    if (shouldSend) {
-      setIsUploading(true);
-      try {
-        const base64Audio = await generateSynthVoiceNote();
-        await handleSendMessage(undefined, {
-          text: 'Voice Note',
-          type: 'audio',
-          url: base64Audio
-        });
-      } catch (err) {
-        console.error("Synthetic recorder simulation failed:", err);
-      } finally {
-        setIsUploading(false);
-      }
-    }
-  };
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -1030,7 +784,6 @@ function ChatApp() {
       setMicMuted(false);
       setVideoMuted(false);
       setCallError('');
-      setUsingVirtualCallStream(false);
       setVolumeLevel(0);
       if (audioContextRef.current) {
         audioContextRef.current.close().catch(() => {});
@@ -1088,32 +841,26 @@ function ChatApp() {
           const isCaller = callDocData ? (callDocData.callerId === userId) : isCallerRef.current;
           isCallerRef.current = isCaller;
 
-          let stream: MediaStream;
-          
-          if (usingVirtualCallStream) {
-            stream = createVirtualMediaStream(callState.type === 'video');
-          } else {
-            const constraints = {
-              audio: true,
-              video: callState.type === 'video' ? {
-                width: { ideal: 640 },
-                height: { ideal: 480 },
-                facingMode: 'user'
-              } : false
-            };
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
-          }
+          const constraints = {
+            audio: true,
+            video: callState.type === 'video' ? {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: 'user'
+            } : false
+          };
+          const localStream = await navigator.mediaDevices.getUserMedia(constraints);
 
           // Apply existing mute settings in case we pre-muted or toggled
-          stream.getAudioTracks().forEach(track => {
+          localStream.getAudioTracks().forEach(track => {
             track.enabled = !micMuted;
           });
-          stream.getVideoTracks().forEach(track => {
+          localStream.getVideoTracks().forEach(track => {
             track.enabled = !videoMuted;
           });
           
-          activeStream = stream;
-          setLocalStream(stream);
+          activeStream = localStream;
+          setLocalStream(localStream);
 
           // Web Audio visualizer setup
           try {
@@ -1124,7 +871,7 @@ function ChatApp() {
               const analyser = audioCtx.createAnalyser();
               analyserRef.current = analyser;
               analyser.fftSize = 256;
-              const source = audioCtx.createMediaStreamSource(stream);
+              const source = audioCtx.createMediaStreamSource(localStream);
               source.connect(analyser);
 
               const bufferLength = analyser.frequencyBinCount;
@@ -1164,9 +911,9 @@ function ChatApp() {
           peerConnectionRef.current = pc;
 
           // Add tracks to PeerConnection
-          stream.getTracks().forEach(track => {
-            if (pc && activeStream) {
-              pc.addTrack(track, activeStream);
+          localStream.getTracks().forEach(track => {
+            if (pc) {
+              pc.addTrack(track, localStream);
             }
           });
 
@@ -1174,19 +921,6 @@ function ChatApp() {
           pc.ontrack = (event) => {
             if (event.streams && event.streams[0]) {
               setRemoteStream(event.streams[0]);
-            } else {
-              setRemoteStream(prev => {
-                if (prev) {
-                  if (!prev.getTracks().some(t => t.id === event.track.id)) {
-                    prev.addTrack(event.track);
-                  }
-                  return new MediaStream(prev.getTracks());
-                } else {
-                  const ms = new MediaStream();
-                  ms.addTrack(event.track);
-                  return ms;
-                }
-              });
             }
           };
 
@@ -1247,30 +981,25 @@ function ChatApp() {
           } else {
             // RECEIVER FLOW (Only execute when active or accepted)
             if (callState.status === 'active') {
-              // Listen dynamically for the Caller's SDP offer, avoiding race conditions if media initialization takes time
-              unsubscribeAnswer = onSnapshot(callDocRef, async (snapshot) => {
-                const data = snapshot.data();
-                if (data && data.offer && pc && !pc.remoteDescription) {
-                  try {
-                    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-                    await processCandidateQueue();
-                    
-                    // Create SDP Answer
-                    const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
+              // 1. Fetch current Caller Offer
+              const snapshot = await getDoc(callDocRef);
+              const data = snapshot.data();
+              if (data && data.offer && pc) {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                await processCandidateQueue();
+                
+                // 2. Create SDP Answer
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
 
-                    // Write Answer to Firestore Call Document
-                    await setDoc(callDocRef, {
-                      answer: {
-                        type: answer.type,
-                        sdp: answer.sdp
-                      }
-                    }, { merge: true });
-                  } catch (e) {
-                    console.error("Error setting remote description/answer on receiver:", e);
+                // 3. Write Answer to Firestore Call Document
+                await setDoc(callDocRef, {
+                  answer: {
+                    type: answer.type,
+                    sdp: answer.sdp
                   }
-                }
-              });
+                }, { merge: true });
+              }
 
               // 4. Listen for Caller's ICE Candidates with ID isolation
               const txCandidatesCol = collection(db, `rooms/${currentRoom.id}/calls/active/callerCandidates`);
@@ -1288,21 +1017,18 @@ function ChatApp() {
           }
 
         } catch (err: any) {
+          console.error("Media & RTC Initialization Error:", err);
           const errMsg = (err?.message || err?.name || String(err)).toLowerCase();
-          const isPermissionDenied = 
+          if (
             err?.name === 'NotAllowedError' || 
             err?.name === 'PermissionDeniedError' || 
             err?.name === 'SecurityError' ||
             errMsg.includes('denied') || 
             errMsg.includes('allowed') ||
-            errMsg.includes('permission');
-
-          if (isPermissionDenied) {
-            console.warn("Iframe container sandbox blocked physical camera/mic access. Gracefully pivoting to automated Virtual Cyber-Feed fallback to enable WebRTC signal testing.");
-            setUsingVirtualCallStream(true);
-            setCallError('SANDBOX ACCESS RESTRICTED: Automatically redirected to the interactive Cyber Virtual Feed for seamless WebRTC communication testing. To use real camera/mic devices, please launch this application in a new standalone browser tab.');
+            errMsg.includes('permission')
+          ) {
+            setCallError('CAMERA/MIC ACCESS BLOCKED. BROWSER SANDBOXING PREVENTS WEBCAM/MIC USAGE INSIDE THE IFRAME. PLEASE LAUNCH CRACKCHAT IN A STANDALONE NEW TAB TO ENABLE VOICE & VIDEO CALLS!');
           } else {
-            console.error("Media & RTC Initialization Error:", err);
             setCallError('FAILED TO INITIALIZE MEDIA DEVICE: ' + (err?.message || err?.name || String(err)) + '. MAKE SURE NO OTHER APPLICATION IS USING YOUR CAMERA/MIC.');
           }
         }
@@ -1333,7 +1059,7 @@ function ChatApp() {
         }
       };
     }
-  }, [isCallTransmitting, callState?.type, usingVirtualCallStream]);
+  }, [isCallTransmitting, callState?.type]);
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
@@ -2494,16 +2220,6 @@ function ChatApp() {
                 </p>
               </div>
               <div className="flex items-center space-x-2 shrink-0 flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVoiceNoteError(null);
-                    startVirtualRecording();
-                  }}
-                  className="px-2.5 py-1 bg-[var(--crack-orange)]/25 hover:bg-[var(--crack-orange)]/45 text-[var(--crack-orange)] border border-[var(--crack-orange)]/40 rounded text-[9px] font-mono font-black uppercase tracking-wider transition-all cursor-pointer inline-block text-center"
-                >
-                  🎙️ Simulate Note Demo
-                </button>
                 <a
                   href={window.location.href}
                   target="_blank"
@@ -2596,56 +2312,6 @@ function ChatApp() {
                   className="px-4 py-1.5 md:px-5 text-[10px] font-mono uppercase font-black bg-red-600 hover:bg-red-500 text-white border border-red-500/30 hover:border-red-400/50 shadow-md shadow-red-900/30 transition-all rounded cursor-pointer"
                 >
                   Stop & Send
-                </button>
-              </div>
-            </div>
-          ) : isVirtualRecording ? (
-            <div className="relative flex items-center justify-between bg-black/95 border border-[var(--crack-orange)]/30 py-3.5 px-4 md:px-6 shadow-[0_0_20px_rgba(249,115,22,0.15)] animate-in fade-in select-none">
-              {/* Left Zone: Recording status, timer, visualizer */}
-              <div className="flex items-center space-x-3.5 flex-1 min-w-0">
-                <span className="relative flex h-3 w-3 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-[var(--crack-orange)]"></span>
-                </span>
-                
-                <span className="font-mono text-xs font-bold text-[var(--crack-orange)] tracking-wider">
-                  VIRTUAL REC • {formatTime(recordingDuration)}
-                </span>
-
-                {/* Pulsing visualizer lines */}
-                <div className="hidden sm:flex items-end space-x-0.5 h-4 px-3 border-l border-zinc-700">
-                  {Array.from({ length: 16 }).map((_, i) => (
-                    <div 
-                      key={i} 
-                      className="w-0.5 bg-[var(--crack-orange)] animate-[pulse_0.8s_ease-in-out_infinite] rounded-t"
-                      style={{ 
-                        height: `${20 + Math.random() * 80}%`, 
-                        animationDelay: `${i * 0.05}s` 
-                      }} 
-                    />
-                  ))}
-                </div>
-                
-                <span className="text-[10px] text-zinc-500 font-mono uppercase truncate min-w-0">
-                  SYNTHESIZING Waveform...
-                </span>
-              </div>
-
-              {/* Right Zone: Discard and Send buttons */}
-              <div className="flex items-center space-x-2 md:space-x-3 shrink-0">
-                <button 
-                  type="button" 
-                  onClick={() => stopVirtualRecording(false)}
-                  className="px-3.5 py-1.5 md:px-4 text-[10px] font-mono uppercase font-black text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-all rounded cursor-pointer"
-                >
-                  Discard
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => stopVirtualRecording(true)}
-                  className="px-4 py-1.5 md:px-5 text-[10px] font-mono uppercase font-black bg-[var(--crack-orange)] hover:bg-orange-500 text-black border border-orange-500/30 hover:border-orange-400/50 shadow-md shadow-orange-950/30 transition-all rounded cursor-pointer font-extrabold"
-                >
-                  Transmit Synth
                 </button>
               </div>
             </div>
@@ -2844,16 +2510,6 @@ function ChatApp() {
                       {callError}
                     </p>
                     <div className="flex flex-wrap items-center justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCallError('');
-                          setUsingVirtualCallStream(true);
-                        }}
-                        className="px-4 py-2 bg-[var(--crack-orange)] text-black font-mono text-[9px] font-black uppercase tracking-widest rounded-sm hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shadow-lg cursor-pointer text-center inline-block font-bold"
-                      >
-                        📶 Bypass with Virtual Cyber Feed
-                      </button>
                       {callError.includes('NEW TAB') && (
                         <a
                           href={window.location.href}
