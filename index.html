@@ -4,6 +4,58 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
+    <script>
+      // Anti-Adblock console-clutter prevention hook: Intercepts analytics calls and mocks them in-memory to prevent ERR_BLOCKED_BY_CLIENT console errors
+      (function() {
+        const isAnalyticsUrl = function(url) {
+          if (!url) return false;
+          const urlStr = String(url);
+          return urlStr.includes('google-analytics.com') || urlStr.includes('doubleclick.net');
+        };
+
+        // 1. Intercept fetch API
+        if (window.fetch) {
+          const originalFetch = window.fetch;
+          window.fetch = function(input, init) {
+            const url = (typeof input === 'string') ? input : (input && input.url);
+            if (isAnalyticsUrl(url)) {
+              return Promise.resolve(new Response(JSON.stringify({ status: 'mocked' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              }));
+            }
+            return originalFetch.apply(this, arguments);
+          };
+        }
+
+        // 2. Intercept XMLHttpRequest (XHR)
+        const originalOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url) {
+          if (isAnalyticsUrl(url)) {
+            this.send = function() {
+              Object.defineProperty(this, 'readyState', { value: 4, configurable: true });
+              Object.defineProperty(this, 'status', { value: 200, configurable: true });
+              Object.defineProperty(this, 'responseText', { value: '{"status":"mocked"}', configurable: true });
+              if (this.onreadystatechange) this.onreadystatechange();
+              if (this.onload) this.onload();
+            };
+            return;
+          }
+          return originalOpen.apply(this, arguments);
+        };
+
+        // 3. Intercept navigator.sendBeacon
+        if (navigator.sendBeacon) {
+          const originalSendBeacon = navigator.sendBeacon;
+          navigator.sendBeacon = function(url, data) {
+            if (isAnalyticsUrl(url)) {
+              return true; // Pretend it was transmitted successfully
+            }
+            return originalSendBeacon.apply(this, arguments);
+          };
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
