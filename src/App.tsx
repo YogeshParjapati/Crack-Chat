@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2, Terminal, Cpu, Layers, Wifi, Mic, MicOff, VideoOff, Maximize2, ZoomIn } from 'lucide-react';
+import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2, Terminal, Cpu, Layers, Wifi, Mic, MicOff, VideoOff, Maximize2, ZoomIn, Play, Pause } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 
 import { cn } from '@/src/lib/utils';
@@ -27,7 +27,7 @@ interface Message {
   sender: string;
   timestamp: number;
   color: string;
-  type: 'text' | 'emoji' | 'gif' | 'sticker' | 'image' | 'video';
+  type: 'text' | 'emoji' | 'gif' | 'sticker' | 'image' | 'video' | 'audio';
   url?: string;
   uid: string;
   replyTo?: {
@@ -212,6 +212,289 @@ const BOOT_LOG_LINES = [
   "INITIALIZATION SUCCESSFUL. HOST SECURED."
 ];
 
+const formatTime = (time: number) => {
+  if (isNaN(time) || !isFinite(time)) return '0:00';
+  const mins = Math.floor(time / 60);
+  const secs = Math.floor(time % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+};
+
+function audioBufferToWav(buffer: AudioBuffer): Blob {
+  const numOfChan = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const format = 1; // 1 = Raw uncompressed PCM
+  const bitDepth = 16;
+  
+  let result;
+  if (numOfChan === 2) {
+    result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
+  } else {
+    result = buffer.getChannelData(0);
+  }
+  
+  const bufferArr = new ArrayBuffer(44 + result.length * 2);
+  const view = new DataView(bufferArr);
+  
+  /* RIFF identifier */
+  writeString(view, 0, 'RIFF');
+  /* file length */
+  view.setUint32(4, 36 + result.length * 2, true);
+  /* RIFF type */
+  writeString(view, 8, 'WAVE');
+  /* format chunk identifier */
+  writeString(view, 12, 'fmt ');
+  /* format chunk length */
+  view.setUint32(16, 16, true);
+  /* sample format (raw) */
+  view.setUint16(20, format, true);
+  /* channel count */
+  view.setUint16(22, numOfChan, true);
+  /* sample rate */
+  view.setUint32(24, sampleRate, true);
+  /* byte rate */
+  view.setUint32(28, sampleRate * numOfChan * (bitDepth / 8), true);
+  /* block align */
+  view.setUint16(32, numOfChan * (bitDepth / 8), true);
+  /* bits per sample */
+  view.setUint16(34, bitDepth, true);
+  /* data chunk identifier */
+  writeString(view, 36, 'data');
+  /* data chunk length */
+  view.setUint32(40, result.length * 2, true);
+  
+  floatTo16BitPCM(view, 44, result);
+  
+  return new Blob([bufferArr], { type: 'audio/wav' });
+}
+
+function interleave(inputL: Float32Array, inputR: Float32Array): Float32Array {
+  const length = inputL.length + inputR.length;
+  const result = new Float32Array(length);
+  let index = 0;
+  let inputIndex = 0;
+  
+  while (index < length) {
+    result[index++] = inputL[inputIndex];
+    result[index++] = inputR[inputIndex];
+    inputIndex++;
+  }
+  return result;
+}
+
+function floatTo16BitPCM(output: DataView, offset: number, input: Float32Array) {
+  for (let i = 0; i < input.length; i++, offset += 2) {
+    let s = Math.max(-1, Math.min(1, input[i]));
+    output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+}
+
+function writeString(view: DataView, offset: number, string: string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+const generateSynthVoiceNote = async (): Promise<string> => {
+  const sampleRate = 44100;
+  const duration = 3.5;
+  const ctx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(1, sampleRate * duration, sampleRate);
+  
+  const osc = ctx.createOscillator();
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(120, 0);
+  osc.frequency.exponentialRampToValueAtTime(85, duration);
+  
+  const lfo = ctx.createOscillator();
+  const lfoGain = ctx.createGain();
+  lfo.frequency.value = 6.0;
+  lfoGain.gain.value = 20;
+  
+  lfo.connect(lfoGain);
+  lfoGain.connect(osc.frequency);
+  
+  filter.type = 'bandpass';
+  filter.Q.value = 4.0;
+  filter.frequency.setValueAtTime(550, 0);
+  filter.frequency.exponentialRampToValueAtTime(320, duration);
+  
+  const beepOsc = ctx.createOscillator();
+  const beepGain = ctx.createGain();
+  beepOsc.type = 'sine';
+  beepOsc.frequency.setValueAtTime(640, 0.4);
+  beepOsc.frequency.setValueAtTime(960, 0.7);
+  beepOsc.frequency.setValueAtTime(1280, 1.0);
+  beepOsc.frequency.exponentialRampToValueAtTime(80, 2.5);
+  
+  beepGain.gain.setValueAtTime(0, 0);
+  beepGain.gain.linearRampToValueAtTime(0.06, 0.4);
+  beepGain.gain.exponentialRampToValueAtTime(0.001, 2.5);
+  
+  osc.connect(filter);
+  filter.connect(gain);
+  
+  beepOsc.connect(beepGain);
+  beepGain.connect(ctx.destination);
+  
+  gain.gain.setValueAtTime(0, 0);
+  gain.gain.linearRampToValueAtTime(0.3, 0.1);
+  gain.gain.linearRampToValueAtTime(0.2, duration - 0.4);
+  gain.gain.exponentialRampToValueAtTime(0.001, duration);
+  
+  gain.connect(ctx.destination);
+  
+  osc.start(0);
+  lfo.start(0);
+  beepOsc.start(0.4);
+  
+  osc.stop(duration);
+  lfo.stop(duration);
+  beepOsc.stop(2.5);
+  
+  const renderedBuffer = await ctx.startRendering();
+  const wavBlob = audioBufferToWav(renderedBuffer);
+  
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      resolve(reader.result as string);
+    };
+    reader.readAsDataURL(wavBlob);
+  });
+};
+
+interface VoiceNotePlayerProps {
+  url: string;
+}
+
+function VoiceNotePlayer({ url }: VoiceNotePlayerProps) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration || 0);
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('ended', handleEnded);
+
+    // If metadata was already loaded or cached
+    if (audio.duration) {
+      setDuration(audio.duration);
+    }
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [url]);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      audio.play().then(() => {
+        setIsPlaying(true);
+      }).catch(err => {
+        console.warn("Audio playback failed:", err);
+      });
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const seekTime = Number(e.target.value);
+    audio.currentTime = seekTime;
+    setCurrentTime(seekTime);
+  };
+
+  return (
+    <div className="flex items-center space-x-3 bg-zinc-900/60 backdrop-blur-md p-3 rounded-lg border border-white/10 w-full max-w-sm hover:border-[var(--crack-orange)] transition-all duration-300 shadow-lg">
+      <audio ref={audioRef} src={url} className="hidden" preload="auto" />
+      
+      {/* Play/Pause Button */}
+      <button 
+        type="button"
+        onClick={togglePlay}
+        className="flex items-center justify-center w-10 h-10 rounded-full bg-[var(--crack-orange)]/15 border border-[var(--crack-orange)]/45 hover:bg-[var(--crack-orange)]/30 hover:scale-105 active:scale-95 text-[var(--crack-orange)] transition-all duration-300 shadow-md cursor-pointer shrink-0"
+      >
+        {isPlaying ? (
+          <Pause className="w-4 h-4 fill-current text-[var(--crack-orange)]" />
+        ) : (
+          <Play className="w-4 h-4 fill-current ml-0.5 text-[var(--crack-orange)]" />
+        )}
+      </button>
+
+      {/* Track info & progress slider */}
+      <div className="flex-1 flex flex-col space-y-1 overflow-hidden">
+        <div className="flex items-center justify-between text-[9px] font-mono tracking-wider text-zinc-400">
+          <span className="flex items-center space-x-1 font-bold uppercase text-[var(--crack-orange)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--crack-orange)] animate-pulse" />
+            <span>Voice Note</span>
+          </span>
+          <span>{formatTime(currentTime)} / {formatTime(duration || 0)}</span>
+        </div>
+        
+        {/* Progress seekbar */}
+        <input 
+          type="range"
+          min={0}
+          max={duration || 100}
+          value={currentTime}
+          onChange={handleSeek}
+          className="w-full h-1 bg-zinc-800 rounded-lg cursor-pointer appearance-none hover:h-1.5 transition-all outline-none"
+          style={{ accentColor: 'var(--crack-orange)' }}
+        />
+
+        {/* CSS Cyber Visualizer bars */}
+        <div className="flex items-end justify-between h-3.5 pt-0.5 px-0.5 opacity-60">
+          {Array.from({ length: 32 }).map((_, i) => {
+            // Generate deterministic pseudorandom height based on index
+            const baseH = (i % 3 === 0 ? 30 : i % 2 === 0 ? 60 : 40) + Math.sin(i * 1.5) * 15;
+            const active = isPlaying && currentTime > 0;
+            return (
+              <div 
+                key={i} 
+                className={cn(
+                  "w-0.5 rounded-t-full transition-all duration-300",
+                  active ? "bg-[var(--crack-orange)] animate-pulse" : "bg-zinc-700"
+                )}
+                style={{ 
+                  height: active ? `${Math.max(15, baseH + Math.random() * 40)}%` : `${Math.max(10, baseH - 15)}%`,
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ChatApp() {
   const [isBooting, setIsBooting] = useState(true);
   const [bootLogIndex, setBootLogIndex] = useState(0);
@@ -283,6 +566,158 @@ function ChatApp() {
   const [videoMuted, setVideoMuted] = useState(false);
   const [callError, setCallError] = useState('');
   const [volumeLevel, setVolumeLevel] = useState(0);
+
+  // Voice recording states & refs
+  const [isRecording, setIsRecording] = useState(false);
+  const [isVirtualRecording, setIsVirtualRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [voiceNoteError, setVoiceNoteError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | number | null>(null);
+
+  const startVoiceRecording = async () => {
+    setVoiceNoteError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const options = { mimeType: 'audio/webm' };
+      
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream, options);
+      } catch (e) {
+        // Fallback mimeType if audio/webm is not supported (e.g., on Safari/iOS)
+        recorder = new MediaRecorder(stream);
+      }
+
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        // Stop all tracks to release the mic
+        stream.getTracks().forEach(track => track.stop());
+
+        if (audioChunksRef.current.length === 0) return;
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
+        
+        // Let's check size
+        if (audioBlob.size > 500 * 1024) {
+          setVoiceNoteError('RECORDING BLOCKED: Voice note exceeded maximum 500KB buffer size. Please keep recordings brief.');
+          return;
+        }
+
+        setIsUploading(true);
+        try {
+          // Convert Blob to Base64
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            const base64 = reader.result as string;
+            await handleSendMessage(undefined, {
+              text: 'Voice Note',
+              type: 'audio',
+              url: base64
+            });
+            setIsUploading(false);
+          };
+          reader.readAsDataURL(audioBlob);
+        } catch (err) {
+          console.error("Failed to encode audio:", err);
+          setIsUploading(false);
+        }
+      };
+
+      recorder.start(250); // Get chunks every 250ms
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      const interval = setInterval(() => {
+        setRecordingDuration(prev => {
+          if (prev >= 180) { // Limit to 3 mins
+            stopVoiceRecording(true);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+      recordingIntervalRef.current = interval;
+
+    } catch (err: any) {
+      console.error("Microphone access failed for voice note:", err);
+      const isIframe = window.self !== window.top;
+      if (isIframe) {
+        setVoiceNoteError("Microphone access is blocked by the iframe container. To record, please launch CrackChat in a standalone window/tab!");
+      } else {
+        setVoiceNoteError(`Microphone access failed (${err?.message || err?.name || 'Permission denied'}). Please ensure microphone permissions are allowed in Chrome/Safari browser settings.`);
+      }
+    }
+  };
+
+  const stopVoiceRecording = (shouldSend: boolean) => {
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current as any);
+      recordingIntervalRef.current = null;
+    }
+
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      if (!shouldSend) {
+        // Override onstop so it doesn't send
+        recorder.onstop = () => {
+          recorder.stream.getTracks().forEach(track => track.stop());
+        };
+      }
+      recorder.stop();
+    }
+    setIsRecording(false);
+  };
+
+  const startVirtualRecording = () => {
+    setVoiceNoteError(null);
+    setIsVirtualRecording(true);
+    setRecordingDuration(0);
+
+    const interval = setInterval(() => {
+      setRecordingDuration(prev => {
+        if (prev >= 6) { // Automatically stops and transmits at 6 seconds
+          stopVirtualRecording(true);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 1000);
+    recordingIntervalRef.current = interval;
+  };
+
+  const stopVirtualRecording = async (shouldSend: boolean) => {
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current as any);
+      recordingIntervalRef.current = null;
+    }
+    setIsVirtualRecording(false);
+
+    if (shouldSend) {
+      setIsUploading(true);
+      try {
+        const base64Audio = await generateSynthVoiceNote();
+        await handleSendMessage(undefined, {
+          text: 'Voice Note',
+          type: 'audio',
+          url: base64Audio
+        });
+      } catch (err) {
+        console.error("Synthetic recorder simulation failed:", err);
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -1616,7 +2051,7 @@ function ChatApp() {
                 dragTransition={{ bounceStiffness: 800, bounceDamping: 18 }}
                 onDragEnd={(_, info) => {
                   if (info.offset.x > 30 || info.velocity.x > 120) {
-                    const replyText = msg.text || (msg.type === 'sticker' ? 'Sent a sticker' : msg.type === 'gif' ? 'Sent a GIF' : msg.type === 'image' ? 'Sent an image' : 'Sent media');
+                    const replyText = msg.text || (msg.type === 'sticker' ? 'Sent a sticker' : msg.type === 'gif' ? 'Sent a GIF' : msg.type === 'image' ? 'Sent an image' : msg.type === 'audio' ? 'Sent a voice note' : 'Sent media');
                     setReplyTo({ text: replyText, sender: msg.sender });
                   }
                 }}
@@ -1701,6 +2136,11 @@ function ChatApp() {
                       >
                         <Maximize2 className="w-3.5 h-3.5" />
                       </button>
+                    </div>
+                  )}
+                  {msg.type === 'audio' && (
+                    <div className="transition-all duration-500">
+                      <VoiceNotePlayer url={msg.url || ''} />
                     </div>
                   )}
                 </div>
@@ -1828,6 +2268,46 @@ function ChatApp() {
 
         {/* Input Area */}
         <div className="p-4 md:p-6 bg-[var(--crack-bg)] border-t border-zinc-900">
+          {voiceNoteError && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-red-950/40 p-3 mb-3 border-l-2 border-red-500 rounded-sm animate-in slide-in-from-bottom-2 gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-red-400 font-mono font-bold uppercase tracking-wider">
+                  ⚠️ MICROPHONE SIGNAL BLOCKED
+                </p>
+                <p className="text-[10px] text-zinc-300 font-sans leading-relaxed mt-0.5">
+                  {voiceNoteError}
+                </p>
+              </div>
+              <div className="flex items-center space-x-2 shrink-0 flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVoiceNoteError(null);
+                    startVirtualRecording();
+                  }}
+                  className="px-2.5 py-1 bg-[var(--crack-orange)]/25 hover:bg-[var(--crack-orange)]/45 text-[var(--crack-orange)] border border-[var(--crack-orange)]/40 rounded text-[9px] font-mono font-black uppercase tracking-wider transition-all cursor-pointer inline-block text-center"
+                >
+                  🎙️ Simulate Note Demo
+                </button>
+                <a
+                  href={window.location.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 rounded text-[9px] font-mono font-black uppercase tracking-wider transition-all cursor-pointer inline-block text-center"
+                >
+                  🚀 Open Standalone Tab
+                </a>
+                <button 
+                  onClick={() => setVoiceNoteError(null)} 
+                  className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded transition-all cursor-pointer shrink-0"
+                  title="Dismiss alert"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {replyTo && (
             <div className="flex items-center justify-between bg-zinc-900/80 p-2 mb-2 border-l-2 border-[var(--crack-orange)] animate-in slide-in-from-bottom-2">
               <div className="text-[10px] text-zinc-400">
@@ -1854,66 +2334,176 @@ function ChatApp() {
             </div>
           )}
 
-          <form 
-            onSubmit={handleSendMessage}
-            className="relative flex items-center bg-black/60 backdrop-blur-2xl border border-white/5 focus-within:border-white transition-all duration-500 shadow-2xl"
-          >
-            <div className="flex items-center px-2 md:px-4 space-x-1 md:space-x-2 border-r border-white/5">
-              <button 
-                type="button"
-                onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowGifPicker(false); }}
-                className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", showEmojiPicker && "text-[var(--crack-orange)]")}
-              >
-                <Smile className="w-5 h-5" />
-              </button>
-              <button 
-                type="button"
-                onClick={() => { setShowGifPicker(!showGifPicker); setShowEmojiPicker(false); }}
-                className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", showGifPicker && "text-[var(--crack-orange)]")}
-              >
-                <ImageIcon className="w-5 h-5" />
-              </button>
-              <button 
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", isUploading && "animate-pulse")}
-              >
-                {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
-              </button>
-              <input 
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                accept="image/*,video/*"
-                className="hidden"
-              />
+          {isRecording ? (
+            <div className="relative flex items-center justify-between bg-black/95 border border-red-500/30 py-3.5 px-4 md:px-6 shadow-[0_0_20px_rgba(239,68,68,0.15)] animate-in fade-in select-none">
+              {/* Left Zone: Recording status, timer, visualizer */}
+              <div className="flex items-center space-x-3.5 flex-1 min-w-0">
+                <span className="relative flex h-3 w-3 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </span>
+                
+                <span className="font-mono text-xs font-bold text-red-500 tracking-wider">
+                  REC • {formatTime(recordingDuration)}
+                </span>
+
+                {/* Pulsing visualizer lines */}
+                <div className="hidden sm:flex items-end space-x-0.5 h-4 px-3 border-l border-zinc-700">
+                  {Array.from({ length: 16 }).map((_, i) => (
+                    <div 
+                      key={i} 
+                      className="w-0.5 bg-red-500 animate-[pulse_0.8s_ease-in-out_infinite] rounded-t"
+                      style={{ 
+                        height: `${30 + Math.random() * 70}%`, 
+                        animationDelay: `${i * 0.05}s` 
+                      }} 
+                    />
+                  ))}
+                </div>
+                
+                <span className="text-[10px] text-zinc-500 font-mono uppercase truncate min-w-0">
+                  COMPRESSING ON-THE-FLY...
+                </span>
+              </div>
+
+              {/* Right Zone: Discard and Send buttons */}
+              <div className="flex items-center space-x-2 md:space-x-3 shrink-0">
+                <button 
+                  type="button" 
+                  onClick={() => stopVoiceRecording(false)}
+                  className="px-3.5 py-1.5 md:px-4 text-[10px] font-mono uppercase font-black text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-all rounded cursor-pointer"
+                >
+                  Discard
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => stopVoiceRecording(true)}
+                  className="px-4 py-1.5 md:px-5 text-[10px] font-mono uppercase font-black bg-red-600 hover:bg-red-500 text-white border border-red-500/30 hover:border-red-400/50 shadow-md shadow-red-900/30 transition-all rounded cursor-pointer"
+                >
+                  Stop & Send
+                </button>
+              </div>
             </div>
-            
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => {
-                setInputText(e.target.value);
-                handleUserTyping();
-              }}
-              placeholder="TRANSMIT..."
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck="false"
-              className="flex-1 bg-transparent py-4 px-3 md:px-6 focus:outline-none font-mono text-xs md:text-sm uppercase tracking-tighter"
-            />
-            
-            <button
-              type="submit"
-              className={cn(
-                "px-4 md:px-6 transition-all active:scale-90",
-                inputText.trim() ? "text-[var(--crack-orange)]" : "text-zinc-700 opacity-30"
-              )}
+          ) : isVirtualRecording ? (
+            <div className="relative flex items-center justify-between bg-black/95 border border-[var(--crack-orange)]/30 py-3.5 px-4 md:px-6 shadow-[0_0_20px_rgba(249,115,22,0.15)] animate-in fade-in select-none">
+              {/* Left Zone: Recording status, timer, visualizer */}
+              <div className="flex items-center space-x-3.5 flex-1 min-w-0">
+                <span className="relative flex h-3 w-3 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-[var(--crack-orange)]"></span>
+                </span>
+                
+                <span className="font-mono text-xs font-bold text-[var(--crack-orange)] tracking-wider">
+                  VIRTUAL REC • {formatTime(recordingDuration)}
+                </span>
+
+                {/* Pulsing visualizer lines */}
+                <div className="hidden sm:flex items-end space-x-0.5 h-4 px-3 border-l border-zinc-700">
+                  {Array.from({ length: 16 }).map((_, i) => (
+                    <div 
+                      key={i} 
+                      className="w-0.5 bg-[var(--crack-orange)] animate-[pulse_0.8s_ease-in-out_infinite] rounded-t"
+                      style={{ 
+                        height: `${20 + Math.random() * 80}%`, 
+                        animationDelay: `${i * 0.05}s` 
+                      }} 
+                    />
+                  ))}
+                </div>
+                
+                <span className="text-[10px] text-zinc-500 font-mono uppercase truncate min-w-0">
+                  SYNTHESIZING Waveform...
+                </span>
+              </div>
+
+              {/* Right Zone: Discard and Send buttons */}
+              <div className="flex items-center space-x-2 md:space-x-3 shrink-0">
+                <button 
+                  type="button" 
+                  onClick={() => stopVirtualRecording(false)}
+                  className="px-3.5 py-1.5 md:px-4 text-[10px] font-mono uppercase font-black text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-all rounded cursor-pointer"
+                >
+                  Discard
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => stopVirtualRecording(true)}
+                  className="px-4 py-1.5 md:px-5 text-[10px] font-mono uppercase font-black bg-[var(--crack-orange)] hover:bg-orange-500 text-black border border-orange-500/30 hover:border-orange-400/50 shadow-md shadow-orange-950/30 transition-all rounded cursor-pointer font-extrabold"
+                >
+                  Transmit Synth
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form 
+              onSubmit={handleSendMessage}
+              className="relative flex items-center bg-black/60 backdrop-blur-2xl border border-white/5 focus-within:border-white transition-all duration-500 shadow-2xl"
             >
-              <Send className="w-5 h-5" />
-            </button>
-          </form>
+              <div className="flex items-center px-2 md:px-4 space-x-1 md:space-x-2 border-r border-white/5">
+                <button 
+                  type="button"
+                  onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowGifPicker(false); }}
+                  className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", showEmojiPicker && "text-[var(--crack-orange)]")}
+                >
+                  <Smile className="w-5 h-5" />
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setShowGifPicker(!showGifPicker); setShowEmojiPicker(false); }}
+                  className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", showGifPicker && "text-[var(--crack-orange)]")}
+                >
+                  <ImageIcon className="w-5 h-5" />
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", isUploading && "animate-pulse")}
+                >
+                  {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={startVoiceRecording}
+                  className="p-2 text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"
+                  title="Record Voice Note"
+                >
+                  <Mic className="w-5 h-5" />
+                </button>
+                <input 
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  accept="image/*,video/*"
+                  className="hidden"
+                />
+              </div>
+              
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => {
+                  setInputText(e.target.value);
+                  handleUserTyping();
+                }}
+                placeholder="TRANSMIT..."
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck="false"
+                className="flex-1 bg-transparent py-4 px-3 md:px-6 focus:outline-none font-mono text-xs md:text-sm uppercase tracking-tighter"
+              />
+              
+              <button
+                type="submit"
+                className={cn(
+                  "px-4 md:px-6 transition-all active:scale-90",
+                  inputText.trim() ? "text-[var(--crack-orange)]" : "text-zinc-700 opacity-30"
+                )}
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </form>
+          )}
           <div className="flex justify-between items-center mt-2">
             <p className="text-[9px] text-zinc-700 uppercase tracking-widest">
               Room: {currentRoom?.id} • {messages.length} Messages
