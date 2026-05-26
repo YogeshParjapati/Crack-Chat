@@ -1,5 +1,6 @@
 {
   "name": "CrackChat",
   "description": "A real-time chat platform with GIF search, emoji support, and room-based chat. No registration required.",
-  "requestFramePermissions": ["camera", "microphone"]
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
