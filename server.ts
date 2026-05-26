@@ -6,6 +6,18 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Enable JSON request body parsing for API endpoints
+  app.use(express.json());
+
+  // API dynamic password verification endpoint for host execution
+  app.post("/api/verify-admin", (req: any, res: any) => {
+    const { password } = req.body;
+    const correctPass = process.env.VITE_ADMIN_PASSWORD || "crackadmin";
+    const enteredPass = (password || "").trim();
+    const isValid = enteredPass === correctPass || enteredPass.toLowerCase() === correctPass.toLowerCase();
+    res.json({ valid: isValid });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

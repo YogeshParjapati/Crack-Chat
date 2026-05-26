@@ -2061,13 +2061,43 @@ function ChatApp() {
                       
                       const correctPass = import.meta.env.VITE_ADMIN_PASSWORD || "crackadmin";
                       const enteredPass = adminPassword.trim();
-                      if (enteredPass === correctPass || enteredPass.toLowerCase() === correctPass.toLowerCase()) {
-                        setIsAdmin(true);
-                        localStorage.setItem('crackchat_is_admin', 'true');
-                        setAdminPassword('');
-                      } else {
-                        setAdminError('ACCESS DENIED: INVALID KEY');
-                      }
+                      
+                      // Authenticate with server-side endpoint first (allows dynamic env checks on hosted Cloud Run)
+                      fetch('/api/verify-admin', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ password: enteredPass })
+                      })
+                      .then(res => res.json())
+                      .then(data => {
+                        if (data && data.valid) {
+                          setIsAdmin(true);
+                          localStorage.setItem('crackchat_is_admin', 'true');
+                          setAdminPassword('');
+                        } else {
+                          // Try local fallback to be very safe
+                          if (enteredPass === correctPass || enteredPass.toLowerCase() === correctPass.toLowerCase()) {
+                            setIsAdmin(true);
+                            localStorage.setItem('crackchat_is_admin', 'true');
+                            setAdminPassword('');
+                          } else {
+                            setAdminError('ACCESS DENIED: INVALID KEY');
+                          }
+                        }
+                      })
+                      .catch(err => {
+                        console.error('Server verify-admin error:', err);
+                        // fallback to local check on network/API failure
+                        if (enteredPass === correctPass || enteredPass.toLowerCase() === correctPass.toLowerCase()) {
+                          setIsAdmin(true);
+                          localStorage.setItem('crackchat_is_admin', 'true');
+                          setAdminPassword('');
+                        } else {
+                          setAdminError('ACCESS DENIED: INVALID KEY');
+                        }
+                      });
                     }}
                     className="space-y-4"
                   >
