@@ -1,10 +1,9 @@
 {
   "projectId": "crack-chat-89277",
-  "appId": "1:565141726044:web:1fbe46cd14a366dc74d799",
-  "apiKey": "AIzaSyDUj0X2MO34Ref-AImtwp1FIxVYBqDH4FA",
+  "appId": "...",
+  "apiKey": "...",
   "authDomain": "crack-chat-89277.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
   "storageBucket": "crack-chat-89277.firebasestorage.app",
-  "messagingSenderId": "565141726044",
+  "messagingSenderId": "...",
   "measurementId": ""
-}
+}-
