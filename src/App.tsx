@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2, Terminal, Cpu, Layers, Wifi, Mic, MicOff, VideoOff } from 'lucide-react';
+import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2, Terminal, Cpu, Layers, Wifi, Mic, MicOff, VideoOff, Maximize2, ZoomIn } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 
 import { cn } from '@/src/lib/utils';
@@ -274,6 +274,7 @@ function ChatApp() {
   const [isMediaLoading, setIsMediaLoading] = useState(false);
   const [roomSearch, setRoomSearch] = useState('');
   const [replyTo, setReplyTo] = useState<{ text: string; sender: string } | null>(null);
+  const [fullscreenMedia, setFullscreenMedia] = useState<{ url: string; type: 'image' | 'video' | 'gif' | 'sticker' } | null>(null);
   const [callState, setCallState] = useState<{ type: 'voice' | 'video'; status: 'calling' | 'incoming' | 'active'; peer?: string } | null>(null);
   
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -304,6 +305,9 @@ function ChatApp() {
       if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
         setShowAdminPanel(prev => !prev);
+      }
+      if (e.key === 'Escape') {
+        setFullscreenMedia(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1648,32 +1652,55 @@ function ChatApp() {
                     </div>
                   )}
                   {msg.type === 'sticker' && (
-                    <div className="transition-all duration-500 hover:scale-110 active:scale-95 cursor-pointer max-w-[200px] py-1 select-none">
+                    <div 
+                      onClick={() => setFullscreenMedia({ url: msg.url, type: 'sticker' })}
+                      className="transition-all duration-500 hover:scale-105 active:scale-95 cursor-zoom-in max-w-[200px] py-1 select-none group relative"
+                    >
                       <img 
                         src={msg.url} 
                         alt="sticker" 
                         className="max-w-[140px] max-h-[140px] md:max-w-[180px] md:max-h-[180px] object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] md:drop-shadow-[0_0_20px_var(--crack-orange)]/30 filter transition-all duration-300"
                         referrerPolicy="no-referrer"
                       />
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded-sm transition-all duration-300">
+                        <ZoomIn className="w-3.5 h-3.5 text-white mr-1" />
+                        <span className="text-[8px] text-white font-mono uppercase tracking-wider">Fullscreen</span>
+                      </div>
                     </div>
                   )}
                   {(msg.type === 'gif' || msg.type === 'image') && (
-                    <div className="transition-all duration-500">
+                    <div 
+                      onClick={() => setFullscreenMedia({ url: msg.url, type: msg.type })}
+                      className="transition-all duration-500 cursor-zoom-in group relative overflow-hidden rounded-sm inline-block max-w-full sm:max-w-[300px]"
+                    >
                       <img 
                         src={msg.url} 
                         alt="media" 
-                        className="max-w-full sm:max-w-[300px] rounded-sm border border-white/10 shadow-2xl"
+                        className="w-full h-auto rounded-sm border border-white/10 shadow-2xl transition-transform duration-300 group-hover:scale-[1.02]"
                         referrerPolicy="no-referrer"
                       />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
+                        <div className="flex flex-col items-center gap-1 scale-90 group-hover:scale-100 transition-transform duration-300">
+                          <Maximize2 className="w-6 h-6 text-white" />
+                          <span className="text-[9px] text-white font-bold font-mono tracking-widest uppercase bg-black/50 px-2 py-0.5 rounded border border-white/10">Maximize</span>
+                        </div>
+                      </div>
                     </div>
                   )}
                   {msg.type === 'video' && (
-                    <div className="transition-all duration-500">
+                    <div className="transition-all duration-500 relative group overflow-hidden rounded-sm inline-block max-w-full sm:max-w-[300px]">
                       <video 
                         src={msg.url} 
                         controls
-                        className="max-w-full sm:max-w-[300px] rounded-sm border border-white/10 shadow-2xl"
+                        className="w-full rounded-sm border border-white/10 shadow-2xl"
                       />
+                      <button 
+                        onClick={() => setFullscreenMedia({ url: msg.url, type: 'video' })}
+                        className="absolute top-2 right-2 bg-black/80 hover:bg-black p-2 rounded-full border border-white/20 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 shadow-2xl z-20"
+                        title="View Fullscreen"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -2155,6 +2182,61 @@ function ChatApp() {
                     </button>
                   ))}
                 </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Fullscreen Media Lightbox Modal */}
+        <AnimatePresence>
+          {fullscreenMedia && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4 select-none cursor-pointer"
+              onClick={() => setFullscreenMedia(null)}
+            >
+              {/* Close button */}
+              <button 
+                onClick={() => setFullscreenMedia(null)}
+                className="absolute top-4 right-4 p-2 bg-white/5 hover:bg-white/15 border border-white/10 text-white rounded-full transition-all duration-300 hover:scale-110 z-[110] shadow-2xl cursor-pointer"
+                title="Close Fullscreen (Esc)"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              {/* Media Container */}
+              <motion.div 
+                initial={{ scale: 0.9, y: 15 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 15 }}
+                transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                className="relative max-w-full max-h-[85vh] flex items-center justify-center cursor-default"
+                onClick={(e) => e.stopPropagation()} // Prevent closing when clicking media itself
+              >
+                {(fullscreenMedia.type === 'image' || fullscreenMedia.type === 'gif' || fullscreenMedia.type === 'sticker') ? (
+                  <img 
+                    src={fullscreenMedia.url} 
+                    alt="Fullscreen shared resource" 
+                    className="max-w-full max-h-[85vh] object-contain rounded border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] select-all"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <video 
+                    src={fullscreenMedia.url} 
+                    controls 
+                    autoPlay
+                    className="max-w-full max-h-[85vh] rounded border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
+                  />
+                )}
+              </motion.div>
+
+              {/* Detail indicator below media */}
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-center pointer-events-none">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-400">
+                  Shared {fullscreenMedia.type} • Click anywhere outside or press Esc to close
+                </p>
               </div>
             </motion.div>
           )}
