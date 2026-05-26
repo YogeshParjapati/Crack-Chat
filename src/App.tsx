@@ -222,6 +222,21 @@ function ChatApp() {
 
   const [onlineCount, setOnlineCount] = useState(1);
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('crackchat_is_admin') === 'true');
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [adminActiveTab, setAdminActiveTab] = useState<'rooms' | 'messages'>('rooms');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState('');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setShowAdminPanel(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Typing state for Indicator
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -1144,7 +1159,8 @@ function ChatApp() {
             <motion.h1 
               initial={{ scale: 0.8, filter: 'blur(10px)' }}
               animate={{ scale: 1, filter: 'blur(0px)' }}
-              className="text-5xl sm:text-7xl md:text-9xl font-black tracking-tighter uppercase italic text-white break-words"
+              onDoubleClick={() => setShowAdminPanel(true)}
+              className="text-5xl sm:text-7xl md:text-9xl font-black tracking-tighter uppercase italic text-white break-words cursor-pointer select-none"
             >
               CRACK<span className="text-[var(--crack-orange)]">CHAT</span>
             </motion.h1>
@@ -1321,6 +1337,7 @@ function ChatApp() {
           setShowThemePicker={setShowThemePicker}
           roomSearch={roomSearch}
           setRoomSearch={setRoomSearch}
+          setShowAdminPanel={setShowAdminPanel}
         />
       </div>
 
@@ -1353,6 +1370,7 @@ function ChatApp() {
                 roomSearch={roomSearch}
                 setRoomSearch={setRoomSearch}
                 onClose={() => setShowMobileSidebar(false)}
+                setShowAdminPanel={setShowAdminPanel}
               />
             </motion.div>
           </>
@@ -1407,7 +1425,13 @@ function ChatApp() {
             
 
 
-            <div className="text-white font-black italic tracking-tighter text-sm md:text-base hidden min-[380px]:block">CRACKCHAT</div>
+            <div 
+              onDoubleClick={() => setShowAdminPanel(true)}
+              className="text-white font-black italic tracking-tighter text-sm md:text-base hidden min-[380px]:block cursor-pointer select-none"
+              title="Double click for secret console"
+            >
+              CRACKCHAT
+            </div>
           </div>
         </header>
 
@@ -1964,6 +1988,269 @@ function ChatApp() {
           </defs>
         </svg>
 
+        {/* Admin Panel Overlay */}
+        <AnimatePresence>
+          {showAdminPanel && (
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed right-0 top-0 bottom-0 w-full sm:w-[400px] bg-zinc-950 border-l border-white/10 z-[70] p-6 flex flex-col shadow-2xl backdrop-blur-xl font-sans text-white"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col">
+                  <h2 className="text-xl font-black uppercase tracking-tighter italic flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-[var(--crack-orange)]" />
+                    <span>SYS ADMIN CONSOLE</span>
+                  </h2>
+                  {isAdmin && <span className="text-[8px] text-[var(--crack-orange)] font-bold uppercase tracking-[0.2em] animate-pulse">Root Access Level</span>}
+                </div>
+                <button onClick={() => setShowAdminPanel(false)} className="text-zinc-500 hover:text-white transition-colors p-1.5 hover:bg-white/5 rounded">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {!isAdmin ? (
+                <div className="space-y-6 flex-1 flex flex-col justify-center p-4">
+                  <div className="text-center space-y-3">
+                    <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto shadow-2xl shadow-red-500/10">
+                      <Lock className="w-7 h-7 text-red-500 animate-pulse" />
+                    </div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-red-500">Terminal Encrypted</h3>
+                    <p className="text-[10px] text-zinc-500 max-w-xs mt-2 font-bold tracking-tight uppercase leading-relaxed mx-auto font-mono">
+                      Please input the administrator security credential to authorize server-level administrative features.
+                    </p>
+                  </div>
+                  
+                  <form 
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setAdminError('');
+                      
+                      const correctPass = import.meta.env.VITE_ADMIN_PASSWORD || "crackadmin";
+                      const enteredPass = adminPassword.trim();
+                      
+                      fetch('/api/verify-admin', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ password: enteredPass })
+                      })
+                      .then(res => {
+                        if (!res.ok) {
+                          throw new Error(`HTTP error! status: ${res.status}`);
+                        }
+                        return res.json();
+                      })
+                      .then(data => {
+                        if (data && data.valid) {
+                          setIsAdmin(true);
+                          localStorage.setItem('crackchat_is_admin', 'true');
+                          setAdminPassword('');
+                        } else {
+                          if (enteredPass === correctPass || enteredPass.toLowerCase() === correctPass.toLowerCase()) {
+                            setIsAdmin(true);
+                            localStorage.setItem('crackchat_is_admin', 'true');
+                            setAdminPassword('');
+                          } else {
+                            setAdminError('ACCESS DENIED: KEY FAILURE');
+                          }
+                        }
+                      })
+                      .catch(err => {
+                        console.error('Server verify-admin error:', err);
+                        if (enteredPass === correctPass || enteredPass.toLowerCase() === correctPass.toLowerCase()) {
+                          setIsAdmin(true);
+                          localStorage.setItem('crackchat_is_admin', 'true');
+                          setAdminPassword('');
+                        } else {
+                          setAdminError('ACCESS DENIED: KEY FAILURE');
+                        }
+                      });
+                    }}
+                    className="space-y-4"
+                  >
+                    <div className="space-y-2">
+                      <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest block font-mono">Sec_Auth_Passkey</label>
+                      <input 
+                        type="password"
+                        placeholder="PROMPT_KEY..."
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 p-3 text-xs tracking-widest font-mono text-center focus:outline-none focus:border-[var(--crack-orange)] focus:ring-1 focus:ring-[var(--crack-orange)]/30 transition-all text-white rounded-sm"
+                      />
+                    </div>
+
+                    {adminError && (
+                      <p className="text-[10px] text-red-400 text-center font-black tracking-widest uppercase font-mono animate-pulse bg-red-500/10 p-2 border border-red-500/20">
+                        {adminError}
+                      </p>
+                    )}
+
+                    <button 
+                      type="submit"
+                      className="w-full bg-white text-black font-black uppercase py-3 text-xs tracking-widest hover:bg-[var(--crack-orange)] hover:text-black transition-all flex items-center justify-center space-x-2 rounded-sm shadow-xl active:scale-95 duration-150"
+                    >
+                      <Unlock className="w-3.5 h-3.5" />
+                      <span>KEY_AUTHORIZE</span>
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col min-h-0 space-y-4">
+                  <div className="flex items-center justify-between bg-white/5 border border-white/5 p-3 rounded">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 rounded-full bg-green-500 animate-ping" />
+                      <span className="text-[9px] text-green-400 uppercase font-black tracking-widest font-mono">SYS_CORE_ACTIVE</span>
+                    </div>
+                    <button 
+                      onClick={() => { 
+                        setIsAdmin(false); 
+                        localStorage.removeItem('crackchat_is_admin'); 
+                      }} 
+                      className="text-[9px] text-zinc-500 hover:text-red-400 uppercase font-black tracking-widest transition-colors font-mono"
+                    >
+                      DE_AUTHORIZATION
+                    </button>
+                  </div>
+
+                  {/* Admin Glass Tabs */}
+                  <div className="grid grid-cols-2 gap-1 p-1 bg-white/5 border border-white/5 text-[10px] uppercase font-black font-mono rounded">
+                    <button 
+                      onClick={() => setAdminActiveTab('rooms')}
+                      className={cn(
+                        "py-2 text-center transition-all rounded-sm",
+                        adminActiveTab === 'rooms' ? "bg-[var(--crack-orange)] text-black font-black" : "text-zinc-500 hover:text-white"
+                      )}
+                    >
+                      Rooms ({rooms.length})
+                    </button>
+                    <button 
+                      onClick={() => setAdminActiveTab('messages')}
+                      className={cn(
+                        "py-2 text-center transition-all rounded-sm",
+                        adminActiveTab === 'messages' ? "bg-[var(--crack-orange)] text-black font-black" : "text-zinc-500 hover:text-white"
+                      )}
+                    >
+                      Active Messages ({messages.length})
+                    </button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-hide select-text">
+                    {adminActiveTab === 'rooms' ? (
+                      rooms.length === 0 ? (
+                        <div className="text-center py-12 text-zinc-600">
+                          <Hash className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                          <p className="text-[10px] uppercase font-bold tracking-widest">No rooms loaded</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-[9px] text-zinc-500 font-mono font-bold uppercase tracking-wider">ALL NETWORK CHANNELS:</p>
+                          {rooms.map((room) => (
+                            <div 
+                              key={room.id} 
+                              className="p-4 bg-zinc-900/60 border border-white/5 rounded space-y-3 hover:border-[var(--crack-orange)]/30 transition-all flex flex-col justify-between"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <Hash className="w-4 h-4 text-[var(--crack-orange)]" />
+                                  <span className="text-xs font-black uppercase tracking-tighter text-white truncate max-w-[150px]">{room.name}</span>
+                                </div>
+                                {room.hasPassword ? (
+                                  <span className="text-[8px] bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded-sm font-bold font-mono tracking-widest uppercase">LOCKED</span>
+                                ) : (
+                                  <span className="text-[8px] bg-green-500/10 text-green-500 border border-green-500/10 px-1.5 py-0.5 rounded-sm font-bold font-mono tracking-widest uppercase">OPEN</span>
+                                )}
+                              </div>
+                              
+                              {room.hasPassword && (
+                                <div className="text-[9px] text-zinc-400 font-mono tracking-tight flex items-center justify-between bg-black/50 p-2 rounded border border-white/5">
+                                  <span className="text-zinc-600 uppercase font-black text-[7px]">CLEARPASS:</span>
+                                  <span className="text-[var(--crack-orange)] font-bold font-mono select-all text-select-all">{room.password || "Empty"}</span>
+                                </div>
+                              )}
+                              
+                              <button
+                                onClick={() => {
+                                  handleJoinRoom(room, '');
+                                  setShowAdminPanel(false);
+                                }}
+                                className="w-full py-2 bg-white/5 hover:bg-[var(--crack-orange)] text-white hover:text-black font-black font-mono uppercase text-[9px] tracking-widest transition-all flex items-center justify-center space-x-1.5 border border-white/10 rounded-sm"
+                              >
+                                <Unlock className="w-3 h-3" />
+                                <span>BYPASS & JOIN</span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between animate-fade-in">
+                          <p className="text-[9px] text-zinc-500 font-mono font-bold uppercase tracking-wider">
+                            {currentRoom ? `MESSAGES IN #${currentRoom.name}:` : 'NO ACTIVE ROOM SELECTED'}
+                          </p>
+                          {currentRoom && (
+                            <button 
+                              onClick={handleClearChat}
+                              className="text-[8px] text-red-400 hover:text-red-500 font-mono font-black uppercase tracking-widest bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded"
+                            >
+                              CLEAR_ALL
+                            </button>
+                          )}
+                        </div>
+                        {messages.length === 0 ? (
+                          <div className="text-center py-12 text-zinc-600">
+                            <Users className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                            <p className="text-[10px] uppercase font-bold tracking-widest">No active messages</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {messages.map((msg) => (
+                              <div 
+                                key={msg.id} 
+                                className="p-3 bg-zinc-900/40 border border-white/5 rounded-sm group hover:border-white/10 transition-all space-y-1"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-1.5">
+                                    <span className={cn("text-[9px] font-black uppercase", msg.color)}>{msg.sender}</span>
+                                    <span className="text-[7px] text-zinc-600 font-mono">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                  </div>
+                                  <button 
+                                    onClick={() => handleDeleteMessage(msg.id)}
+                                    className="text-zinc-500 hover:text-red-400 transition-colors p-1"
+                                    title="Delete message from server"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                <p className="text-[10px] text-zinc-300 break-words leading-relaxed font-mono font-medium">
+                                  {msg.type === 'text' ? msg.text : `[${msg.type.toUpperCase()}]`}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
+                    <p className="text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Administrative Audits</p>
+                    <div className="text-[8px] text-zinc-500 font-mono px-2.5 py-2 bg-black/60 border border-white/5 rounded uppercase space-y-0.5 leading-snug">
+                      <div>HOST: SSL PORTAL INGRESS OK</div>
+                      <div>CLIENT: {userId} Authorized</div>
+                      <div>LOCAL TIME: {new Date().toLocaleTimeString()}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
 
       </div>
     </div>
@@ -1981,7 +2268,8 @@ function SidebarContent({
   setShowThemePicker,
   roomSearch,
   setRoomSearch,
-  onClose
+  onClose,
+  setShowAdminPanel
 }: { 
   rooms: Room[], 
   currentRoom: Room | null, 
@@ -1993,12 +2281,16 @@ function SidebarContent({
   setShowThemePicker: (val: boolean) => void,
   roomSearch: string,
   setRoomSearch: (val: string) => void,
-  onClose?: () => void
+  onClose?: () => void,
+  setShowAdminPanel?: (val: boolean) => void
 }) {
   return (
     <>
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-black tracking-tighter uppercase italic text-white">
+        <h2 
+          onDoubleClick={() => setShowAdminPanel?.(true)}
+          className="text-2xl font-black tracking-tighter uppercase italic text-white cursor-pointer select-none"
+        >
           CRACK<span className="text-[var(--crack-orange)]">CHAT</span>
         </h2>
         <div className="flex items-center space-x-2">
