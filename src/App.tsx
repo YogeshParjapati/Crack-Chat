@@ -156,8 +156,8 @@ const CURATED_GIFS = [
 ].map(item => ({
   id: item.id,
   images: {
-    fixed_height: { url: `https://i.giphy.com/${item.mediaId}.gif` },
-    fixed_height_small: { url: `https://i.giphy.com/${item.mediaId}.gif` }
+    fixed_height: { url: `https://media.giphy.com/media/${item.mediaId}/giphy.gif` },
+    fixed_height_small: { url: `https://media.giphy.com/media/${item.mediaId}/200w.gif` }
   }
 }));
 
@@ -191,8 +191,8 @@ const CURATED_STICKERS = [
 ].map(item => ({
   id: item.id,
   images: {
-    fixed_height: { url: `https://i.giphy.com/${item.mediaId}.gif` },
-    fixed_height_small: { url: `https://i.giphy.com/${item.mediaId}.gif` }
+    fixed_height: { url: `https://media.giphy.com/media/${item.mediaId}/giphy.gif` },
+    fixed_height_small: { url: `https://media.giphy.com/media/${item.mediaId}/200w.gif` }
   }
 }));
 
@@ -1607,13 +1607,16 @@ function ChatApp() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 drag="x"
-                dragConstraints={{ left: 0, right: 100 }}
+                dragConstraints={{ left: 0, right: 60 }}
+                dragElastic={{ left: 0, right: 0.15 }}
+                dragTransition={{ bounceStiffness: 800, bounceDamping: 18 }}
                 onDragEnd={(_, info) => {
-                  if (info.offset.x > 50) {
-                    setReplyTo({ text: msg.text, sender: msg.sender });
+                  if (info.offset.x > 30 || info.velocity.x > 120) {
+                    const replyText = msg.text || (msg.type === 'sticker' ? 'Sent a sticker' : msg.type === 'gif' ? 'Sent a GIF' : msg.type === 'image' ? 'Sent an image' : 'Sent media');
+                    setReplyTo({ text: replyText, sender: msg.sender });
                   }
                 }}
-                className="flex flex-col space-y-1 relative group perspective-container"
+                className="flex flex-col space-y-1 relative group perspective-container select-none md:select-text"
               >
                 {msg.replyTo && (
                   <div className="ml-2 pl-2 border-l-2 border-white/10 text-[10px] text-zinc-500 italic mb-1">
