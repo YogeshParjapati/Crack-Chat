@@ -125,178 +125,76 @@ const THEMES = [
 ];
 
 const CURATED_GIFS = [
-  {
-    id: 'cg_hack',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3ZleDRoMWdycGptNnlmbTh6ZnU3eHJmNzRxazEwbWpsY2M0OWx5ayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Y3Frv9v6M3Be8/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3ZleDRoMWdycGptNnlmbTh6ZnU3eHJmNzRxazEwbWpsY2M0OWx5ayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Y3Frv9v6M3Be8/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_city',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Y4NTh6bXF0NWhnaGdtNHUydDJtd2FpeGV4bWZ4cXBsc2l6eWdzZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0O9xbeIgOPe27ST6/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Y4NTh6bXF0NWhnaGdtNHUydDJtd2FpeGV4bWZ4cXBsc2l6eWdzZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0O9xbeIgOPe27ST6/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_dance',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbDVqbmZoc2g4cGxqaWhrMWZodTF6dzFmNTFjZXZ2cjhhMXk1ZGNvYiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/GeimqsH0TLDt4tScGw/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbDVqbmZoc2g4cGxqaWhrMWZodTF6dzFmNTFjZXZ2cjhhMXk1ZGNvYiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/GeimqsH0TLDt4tScGw/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_blown',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeHpvNDlzdGg2OWM5Z2g1bTNzZTF5NDQ1amM5ajE2bnh5cGxlOGo1cCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Um3ljJl8jfqYI59pRL/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeHpvNDlzdGg2OWM5Z2g1bTNzZTF5NDQ1amM5ajE2bnh5cGxlOGo1cCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Um3ljJl8jfqYI59pRL/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_cheers',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcm5nMXdrdjkwNWJpdTlvMGJjdGN0NHM4Nnh6ZWwzd3p0NTgxdXZscCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/g9582DNuQppazNM4SZ/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcm5nMXdrdjkwNWJpdTlvMGJjdGN0NHM4Nnh6ZWwzd3p0NTgxdXZscCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/g9582DNuQppazNM4SZ/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_popcorn',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeTI4MHB2ZDNmNzkwNHM2Znkwbm40ZnpkdXR0eWhleHh6Zzl1ZXJ6NyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/hVTouqNmqhEAs/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeTI4MHB2ZDNmNzkwNHM2Znkwbm40ZnpkdXR0eWhleHh6Zzl1ZXJ6NyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/hVTouqNmqhEAs/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_lofi',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXl2ZXdyZnJrdzNpZDFzbjNzZ3F5NW9wYmpyejY0NXh2OTI2OHFvaSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/HteV6h0c0HNJK/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXl2ZXdyZnJrdzNpZDFzbjNzZ3F5NW9wYmpyejY0NXh2OTI2OHFvaSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/HteV6h0c0HNJK/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_success',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExenI4NnV5ZHN5bzRxZXAxcjA3Mzd2dTZtczhhdTlkMTVkNXJqNzN1dCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/t3s3G2TXEFrLa/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExenI4NnV5ZHN5bzRxZXAxcjA3Mzd2dTZtczhhdTlkMTVkNXJqNzN1dCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/t3s3G2TXEFrLa/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_rage',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Y1bThna2d2cjB4cHI2bXZodTczMXR6YjdkaTJxdjI3a2U2ZjRneSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/XIqCQx02EwB2g/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Y1bThna2d2cjB4cHI2bXZodTczMXR6YjdkaTJxdjI3a2U2ZjRneSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/XIqCQx02EwB2g/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_fireworks',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdWp3ZnRnbmVhMTJubDR3c3Q0bGl0MGFsbGpxODNjcDdzbm9ia3oxdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26tOZ42cX5VIFGMTK/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdWp3ZnRnbmVhMTJubDR3c3Q0bGl0MGFsbGpxODNjcDdzbm9ia3oxdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26tOZ42cX5VIFGMTK/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_spidey',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMWNnZXZxMTNzNXZpNWs1Zm15MzF0cWRhMmsyd25wOTBrZjJ0czV2dSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l36kU80xPf0ojG0Lm/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMWNnZXZxMTNzNXZpNWs1Zm15MzF0cWRhMmsyd25wOTBrZjJ0czV2dSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l36kU80xPf0ojG0Lm/giphy.gif' }
-    }
-  },
-  {
-    id: 'cg_clap',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZnAyNHlqNWtnaG96aTNpeHNtNGJ3MGIxaG8xbjd0cDB6aGs0dDExaiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/kd9BlRovbPOykLBMqX/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZnAyNHlqNWtnaG96aTNpeHNtNGJ3MGIxaG8xbjd0cDB6aGs0dDExaiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/kd9BlRovbPOykLBMqX/giphy.gif' }
-    }
+  { id: 'cg_hack', mediaId: 'Y3Frv9v6M3Be8' },
+  { id: 'cg_city', mediaId: 'l0O9xbeIgOPe27ST6' },
+  { id: 'cg_dance', mediaId: 'GeimqsH0TLDt4tScGw' },
+  { id: 'cg_blown', mediaId: 'Um3ljJl8jfqYI59pRL' },
+  { id: 'cg_cheers', mediaId: 'g9582DNuQppazNM4SZ' },
+  { id: 'cg_popcorn', mediaId: 'hVTouqNmqhEAs' },
+  { id: 'cg_lofi', mediaId: 'HteV6h0c0HNJK' },
+  { id: 'cg_success', mediaId: 't3s3G2TXEFrLa' },
+  { id: 'cg_rage', mediaId: 'XIqCQx02EwB2g' },
+  { id: 'cg_fireworks', mediaId: '26tOZ42cX5VIFGMTK' },
+  { id: 'cg_spidey', mediaId: 'l36kU80xPf0ojG0Lm' },
+  { id: 'cg_clap', mediaId: 'kd9BlRovbPOykLBMqX' },
+  { id: 'cg_mindblown', mediaId: '26ufdipQqU2lhNA4g' },
+  { id: 'cg_vibing', mediaId: 'tsX3YMWYzDPjAARfPy' },
+  { id: 'cg_shrug', mediaId: 'xuDHhHcRhyfJbGOEiT' },
+  { id: 'cg_crying', mediaId: '9Y5BbDSkSTiY8' },
+  { id: 'cg_yes', mediaId: '3ohzdIuqyOoJT5O4oW' },
+  { id: 'cg_hype', mediaId: '13Y6LAwIqAt7I4' },
+  { id: 'cg_giga', mediaId: 'CAYVZA5NRb529kK9t5' },
+  { id: 'cg_doge', mediaId: 'oBQZf4NGFGjXq' },
+  { id: 'cg_wow', mediaId: 'b8RfbQFafUCNkLw976' },
+  { id: 'cg_scream', mediaId: '3o7TKSj06tqjzp162Q' },
+  { id: 'cg_wink', mediaId: '5GoZ2AOvHn8I0' },
+  { id: 'cg_wave', mediaId: 'Vbtc9VG5wN9gQ' },
+  { id: 'cg_sleeping', mediaId: '12m3cxHKOI8YcE' },
+  { id: 'cg_dance2', mediaId: 'l2JHPB589ADYTVYla' },
+  { id: 'cg_facepalm', mediaId: '3og0INyM6abvkmvJHW' },
+  { id: 'cg_cool', mediaId: '3o7WIEVjXL8EH3N1m0' }
+].map(item => ({
+  id: item.id,
+  images: {
+    fixed_height: { url: `https://i.giphy.com/${item.mediaId}.gif` },
+    fixed_height_small: { url: `https://i.giphy.com/${item.mediaId}.gif` }
   }
-];
+}));
 
 const CURATED_STICKERS = [
-  {
-    id: 'cs_fire',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDZ6ZmQyZDNzY3J3MXphdmNnYmZ4ZzBnbTVxNmYxZTZ6cGx4cm1tMCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Y08bx6Fea1ZgOo7m9d/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDZ6ZmQyZDNzY3J3MXphdmNnYmZ4ZzBnbTVxNmYxZTZ6cGx4cm1tMCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Y08bx6Fea1ZgOo7m9d/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_welcome',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjVycnQ5bjdrZHp4c2o1Z2tnaWN1ZXZuMXR6b2JhcXo5ajRrdThpNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Vff5Qxz6LLzag/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjVycnQ5bjdrZHp4c2o1Z2tnaWN1ZXZuMXR6b2JhcXo5ajRrdThpNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Vff5Qxz6LLzag/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_gamer',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbzVyZWp1ZzRwcmg3NmtwamlwaW9xMmY5amtzYmNjNGM2dzlxejExZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/gGxZ98g01fbyM/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbzVyZWp1ZzRwcmg3NmtwamlwaW9xMmY5amtzYmNjNGM2dzlxejExZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/gGxZ98g01fbyM/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_ok',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNWZ4c2c5dmRxaXhkdG9pcXBtZXZpZzVvMTc4ZzRlOG10czM5dzA3MiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3NtY188QaxDdC/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNWZ4c2c5dmRxaXhkdG9pcXBtZXZpZzVvMTc4ZzRlOG10czM5dzA3MiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3NtY188QaxDdC/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_glasses',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3FvdjE0Nzc1MTZndTVrdzZreXhrZWZndXp6NDVxa243eWp2MmQ1NSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/iN79p9x49DLaU/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3FvdjE0Nzc1MTZndTVrdzZreXhrZWZndXp6NDVxa243eWp2MmQ1NSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/iN79p9x49DLaU/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_heart',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc29lZWtsZ2l5YW5hOTQzYW0xbThhZDBsY29jZDRoamMxdjFtdHh5OSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/unfHhVWqAg6Y0/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc29lZWtsZ2l5YW5hOTQzYW0xbThhZDBsY29jZDRoamMxdjFtdHh5OSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/unfHhVWqAg6Y0/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_crown',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcmAxaGdmcXBnaDRxMzZmaDNhbWswdmkzemNlNjV6YXE2dnY1bzR6NCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/N18fQjAs6w0Q/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcmAxaGdmcXBnaDRxMzZmaDNhbWswdmkzemNlNjV6YXE2dnY1bzR6NCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/N18fQjAs6w0Q/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_sparkles',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNGdyMng5aG4wM25ud3g2dnVteG4zaDYxajhyam9rd3V1NDgxb2JpMyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7qDQ4bY9S3Mw9COA/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNGdyMng5aG4wM25ud3g2dnVteG4zaDYxajhyam9rd3V1NDgxb2JpMyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7qDQ4bY9S3Mw9COA/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_emoji_laughing',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmQxOGoxNGxteWdrZTF1bjZ6Mm1ubTExZ3lzcjUweHZxeGNsdmltNCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26gR1vv96uT6WfIre/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmQxOGoxNGxteWdrZTF1bjZ6Mm1ubTExZ3lzcjUweHZxeGNsdmltNCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26gR1vv96uT6WfIre/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_cat_wave',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNWYyYm9ubmtuOHh4Zmh4cXoxcnJ3YjRmeGNzMXRlYXZiMXlsZmpsZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/13CoXDiaCcX2uI/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNWYyYm9ubmtuOHh4Zmh4cXoxcnJ3YjRmeGNzMXRlYXZiMXlsZmpsZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/13CoXDiaCcX2uI/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_dance_party',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3N2NXN2YnVndmFvM2d4N3FqandkaGJtZTgxdGlidGxtZmF2YWhjdCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/9ggYpn69unA3e/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3N2NXN2YnVndmFvM2d4N3FqandkaGJtZTgxdGlidGxtZmF2YWhjdCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/9ggYpn69unA3e/giphy.gif' }
-    }
-  },
-  {
-    id: 'cs_neon_cat',
-    images: {
-      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3drZnE2YnhyNTN6eGN5cWszOHRhcmcxMTF1OHU3YmsxcDVmMXg5bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0O5Ar4T8O9fW8e68/giphy.gif' },
-      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3drZnE2YnhyNTN6eGN5cWszOHRhcmcxMTF1OHU3YmsxcDVmMXg5bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0O5Ar4T8O9fW8e68/giphy.gif' }
-    }
+  { id: 'cs_fire', mediaId: 'Y08bx6Fea1ZgOo7m9d' },
+  { id: 'cs_welcome', mediaId: 'Vff5Qxz6LLzag' },
+  { id: 'cs_gamer', mediaId: 'gGxZ98g01fbyM' },
+  { id: 'cs_ok', mediaId: '3NtY188QaxDdC' },
+  { id: 'cs_glasses', mediaId: 'iN79p9x49DLaU' },
+  { id: 'cs_heart', mediaId: 'unfHhVWqAg6Y0' },
+  { id: 'cs_crown', mediaId: 'N18fQjAs6w0Q' },
+  { id: 'cs_sparkles', mediaId: '3o7qDQ4bY9S3Mw9COA' },
+  { id: 'cs_emoji_laughing', mediaId: '26gR1vv96uT6WfIre' },
+  { id: 'cs_cat_wave', mediaId: '13CoXDiaCcX2uI' },
+  { id: 'cs_dance_party', mediaId: '9ggYpn69unA3e' },
+  { id: 'cs_neon_cat', mediaId: 'l0O5Ar4T8O9fW8e68' },
+  { id: 'cs_cool_rainbow', mediaId: 'cGF7s207GOA7S7KscL' },
+  { id: 'cs_cute_ghost', mediaId: 'L8K62QD8sc1A6b8Y74' },
+  { id: 'cs_vibe_check', mediaId: 'UrS1A4HreO9A7lC8qg' },
+  { id: 'cs_thumbs_up', mediaId: 'PgnG2kUcoAd6pvyw7G' },
+  { id: 'cs_rocket', mediaId: 'jS6C5W2Oq2N6W5fFfN' },
+  { id: 'cs_spark', mediaId: 'JmIs6pnhm3a6H7m6K0' },
+  { id: 'cs_stars', mediaId: 'l3960G2XfCgpREgQ8' },
+  { id: 'cs_pizza', mediaId: 'l0Iy9q7Qp6u6K0O0w' },
+  { id: 'cs_donut', mediaId: 'l0Iy6nK8u9F1X8qfK' },
+  { id: 'cs_party_popper', mediaId: '374f6H9mKpHREp7u1V' },
+  { id: 'cs_wow_sticker', mediaId: 'l1J9D48XF8Zf9HkUo' },
+  { id: 'cs_peace', mediaId: 'l2SpYgY1q7WfQJt0k' },
+  { id: 'cs_coffee', mediaId: 'l0Iy9R7QkWOnp5u0M' },
+  { id: 'cs_love_eyes', mediaId: '3o7qEcq7Yn7W7mNl6M' }
+].map(item => ({
+  id: item.id,
+  images: {
+    fixed_height: { url: `https://i.giphy.com/${item.mediaId}.gif` },
+    fixed_height_small: { url: `https://i.giphy.com/${item.mediaId}.gif` }
   }
-];
+}));
 
 export default function App() {
   return (
@@ -1151,6 +1049,79 @@ function ChatApp() {
   const searchGifs = async (isTrending = false) => {
     const type = isStickerMode ? 'stickers' : 'gifs';
     
+    // Define a fallback search function that runs purely locally
+    const getLocalFilteredMedia = (searchTerm: string) => {
+      const list = isStickerMode ? CURATED_STICKERS : CURATED_GIFS;
+      if (!searchTerm.trim()) return list;
+      const query = searchTerm.toLowerCase().trim();
+      return list.filter(item => {
+        // Map ids to search terms or do fuzzy matching on the ID
+        const cleanId = item.id.replace(/^c[gs]_/, '').replace(/_/g, ' ');
+        // Also map related synonyms for our curated collection to make search feel magical
+        const synonyms: Record<string, string[]> = {
+          hack: ['hack', 'matrix', 'coder', 'terminal', 'cyberpunk', 'code', 'programming'],
+          city: ['city', 'cyberpunk', 'lofi', 'shinjuku', 'neon', 'tokyo', 'japan', 'night'],
+          dance: ['dance', 'party', 'vibes', 'fun', 'groove', 'anime'],
+          blown: ['blown', 'mind', 'shocked', 'surprised', 'wow', 'incredible'],
+          cheers: ['cheers', 'celebrate', 'toast', 'drink', 'leonardo', 'happy'],
+          popcorn: ['popcorn', 'movie', 'eating', 'drama', 'chill'],
+          lofi: ['lofi', 'ambient', 'relax', 'study', 'chill', 'music'],
+          success: ['success', 'win', 'achievement', 'amazing', 'yes', 'celebration'],
+          rage: ['rage', 'angry', 'mad', 'smash', 'keyboard'],
+          fireworks: ['fireworks', 'new year', 'celebrate', 'sparkle', 'night'],
+          spidey: ['spidey', 'dance', 'spider-man', 'funny'],
+          clap: ['clap', 'applause', 'celebrate', 'congrats'],
+          fire: ['fire', 'hot', 'lit', 'flame', 'hype'],
+          welcome: ['welcome', 'hello', 'hi', 'greet'],
+          gamer: ['gamer', 'gaming', 'play', 'controller'],
+          ok: ['ok', 'yes', 'deal', 'thumbs up'],
+          glasses: ['glasses', 'deal with it', 'cool', 'sunglasses'],
+          heart: ['heart', 'love', 'cute', 'sweet'],
+          crown: ['crown', 'king', 'queen', 'glory', 'gold'],
+          sparkles: ['sparkles', 'magic', 'shine', 'star'],
+          emoji_laughing: ['laugh', 'funny', 'haha', 'lol'],
+          cat_wave: ['cat', 'wave', 'hello', 'cute', 'meow'],
+          dance_party: ['dance', 'party', 'skeleton', 'rave'],
+          neon_cat: ['cat', 'neon', 'nyan', 'rainbow', 'space'],
+          mindblown: ['blown', 'mind', 'shook', 'surprised', 'omg', 'brain'],
+          vibing: ['vibing', 'cat', 'dance', 'bobbing', 'music', 'vibe', 'happy'],
+          shrug: ['shrug', 'care', 'dont care', 'whatever', 'know', 'idk'],
+          crying: ['cry', 'sad', 'tear', 'hurt', 'pain', 'emotional'],
+          yes: ['yes', 'agree', 'nod', 'absolutely', 'correct'],
+          hype: ['hype', 'excited', 'cheer', 'scream', 'jumping'],
+          giga: ['giga', 'chad', 'gigachad', 'muscle', 'handsome', 'sigma'],
+          doge: ['doge', 'dog', 'shiba', 'cute', 'meme', 'much'],
+          wow: ['wow', 'doge', 'amaze', 'mindblown'],
+          scream: ['scream', 'scared', 'shout', 'loud', 'shock'],
+          wink: ['wink', 'flirt', 'cool', 'smile'],
+          wave: ['wave', 'bye', 'hello', 'goodbye', 'greeting'],
+          sleeping: ['sleep', 'tired', 'zzz', 'night', 'bed'],
+          dance2: ['dance', 'party', 'happy', 'cool'],
+          facepalm: ['facepalm', 'shame', 'stupid', 'dumb', 'disgusted'],
+          cool: ['cool', 'shades', 'sunglasses', 'glasses'],
+          cool_rainbow: ['cool', 'neon', 'colorful', 'rainbow', 'sparkle'],
+          cute_ghost: ['ghost', 'cute', 'spooky', 'boo', 'halloween'],
+          vibe_check: ['vibe', 'check', 'cool', 'cat', 'mood'],
+          thumbs_up: ['thumb', 'up', 'yes', 'good', 'agree', 'like'],
+          rocket: ['rocket', 'space', 'to the moon', 'crypto', 'fly'],
+          spark: ['spark', 'fire', 'magic', 'shine'],
+          stars: ['stars', 'magic', 'neon', 'sparkle'],
+          pizza: ['pizza', 'food', 'snack', 'eating', 'hungry'],
+          donut: ['donut', 'food', 'sweet', 'pink'],
+          party_popper: ['party', 'popper', 'congratulations', 'celebrate'],
+          wow_sticker: ['wow', 'star', 'sparkle', 'cool'],
+          peace: ['peace', 'hand', 'love', 'vibe'],
+          coffee: ['coffee', 'tea', 'morning', 'drink', 'cafe'],
+          love_eyes: ['love', 'heart', 'heart eyes', 'cute', 'adore']
+        };
+
+        const key = item.id.replace(/^c[gs]_/, '');
+        const extraMatch = synonyms[key]?.some(syn => syn.includes(query) || query.includes(syn));
+
+        return cleanId.includes(query) || query.includes(cleanId) || extraMatch;
+      });
+    };
+
     if (isTrending || !gifSearch.trim()) {
       setGifs(isStickerMode ? CURATED_STICKERS : CURATED_GIFS);
       setIsMediaLoading(false);
@@ -1163,15 +1134,21 @@ function ChatApp() {
     setIsMediaLoading(true);
     try {
       const res = await fetch(`https://api.giphy.com/v1/${type}/${endpoint}?api_key=dc6zaTOxFJmzC${query}&limit=24`);
+      if (!res.ok) {
+        throw new Error(`HTTP Error ${res.status}`);
+      }
       const data = await res.json();
       if (data && data.data && data.data.length > 0) {
         setGifs(data.data);
       } else {
-        setGifs(isStickerMode ? CURATED_STICKERS : CURATED_GIFS);
+        // Fall back to filtered local list if API returned no matching results
+        setGifs(getLocalFilteredMedia(gifSearch));
       }
     } catch (e) {
-      console.error("Media search failed, falling back to curated assets", e);
-      setGifs(isStickerMode ? CURATED_STICKERS : CURATED_GIFS);
+      // Gracefully handle any network, CORS, or blocked error without polluting console with uncaught errors
+      console.warn("Giphy API is unreachable or blocked. Offline search fallback engaged.", e);
+      // Immediately set gifs to locally filtered results
+      setGifs(getLocalFilteredMedia(gifSearch));
     } finally {
       setIsMediaLoading(false);
     }
@@ -1812,9 +1789,8 @@ function ChatApp() {
                   </div>
                 )}
               </div>
-              <div className="mt-4 pt-2 border-t border-zinc-800 flex justify-between items-center">
+              <div className="mt-4 pt-2 border-t border-zinc-800 text-center">
                 <span className="text-[8px] text-zinc-600 uppercase font-bold">Powered by Giphy</span>
-                <a href="https://giphy.com" target="_blank" rel="noreferrer" className="text-[8px] text-[var(--crack-orange)] uppercase font-bold hover:underline">Explore More</a>
               </div>
             </motion.div>
           )}
