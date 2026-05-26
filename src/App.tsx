@@ -379,10 +379,20 @@ const createVirtualMediaStream = (withVideo: boolean): MediaStream => {
       const gain = audioCtx.createGain();
       
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(440, 0); 
-      osc.frequency.linearRampToValueAtTime(110, 5); 
+      osc.frequency.setValueAtTime(150, 0); 
       
-      gain.gain.setValueAtTime(0.01, 0); 
+      // Infinite slow natural line hum drift (between 140Hz and 160Hz)
+      let t = 0;
+      setInterval(() => {
+        try {
+          if (audioCtx.state !== 'closed') {
+            t += 0.5;
+            osc.frequency.setValueAtTime(150 + Math.sin(t) * 10, audioCtx.currentTime);
+          }
+        } catch (e) {}
+      }, 500);
+      
+      gain.gain.setValueAtTime(0.005, 0); 
       
       osc.connect(gain);
       gain.connect(dest);
@@ -1069,6 +1079,15 @@ function ChatApp() {
       const initializeMediaAndRTC = async () => {
         try {
           setCallError('');
+          if (!currentRoom || !callState) return;
+
+          // Determine of role robustly from the Firestore document call metadata
+          const callDocRef = doc(db, `rooms/${currentRoom.id}/calls`, 'active');
+          const callSnap = await getDoc(callDocRef);
+          const callDocData = callSnap.data();
+          const isCaller = callDocData ? (callDocData.callerId === userId) : isCallerRef.current;
+          isCallerRef.current = isCaller;
+
           let stream: MediaStream;
           
           if (usingVirtualCallStream) {
@@ -1185,8 +1204,6 @@ function ChatApp() {
             }
           };
 
-          const callDocRef = doc(db, `rooms/${currentRoom.id}/calls`, 'active');
-
           if (isCallerRef.current) {
             // CALLER FLOW
             // 1. Create SDP Offer
@@ -1230,25 +1247,30 @@ function ChatApp() {
           } else {
             // RECEIVER FLOW (Only execute when active or accepted)
             if (callState.status === 'active') {
-              // 1. Fetch current Caller Offer
-              const snapshot = await getDoc(callDocRef);
-              const data = snapshot.data();
-              if (data && data.offer) {
-                await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-                await processCandidateQueue();
-                
-                // 2. Create SDP Answer
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
+              // Listen dynamically for the Caller's SDP offer, avoiding race conditions if media initialization takes time
+              unsubscribeAnswer = onSnapshot(callDocRef, async (snapshot) => {
+                const data = snapshot.data();
+                if (data && data.offer && pc && !pc.remoteDescription) {
+                  try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    await processCandidateQueue();
+                    
+                    // Create SDP Answer
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
 
-                // 3. Write Answer to Firestore Call Document
-                await setDoc(callDocRef, {
-                  answer: {
-                    type: answer.type,
-                    sdp: answer.sdp
+                    // Write Answer to Firestore Call Document
+                    await setDoc(callDocRef, {
+                      answer: {
+                        type: answer.type,
+                        sdp: answer.sdp
+                      }
+                    }, { merge: true });
+                  } catch (e) {
+                    console.error("Error setting remote description/answer on receiver:", e);
                   }
-                }, { merge: true });
-              }
+                }
+              });
 
               // 4. Listen for Caller's ICE Candidates with ID isolation
               const txCandidatesCol = collection(db, `rooms/${currentRoom.id}/calls/active/callerCandidates`);
@@ -1266,18 +1288,21 @@ function ChatApp() {
           }
 
         } catch (err: any) {
-          console.error("Media & RTC Initialization Error:", err);
           const errMsg = (err?.message || err?.name || String(err)).toLowerCase();
-          if (
+          const isPermissionDenied = 
             err?.name === 'NotAllowedError' || 
             err?.name === 'PermissionDeniedError' || 
             err?.name === 'SecurityError' ||
             errMsg.includes('denied') || 
             errMsg.includes('allowed') ||
-            errMsg.includes('permission')
-          ) {
-            setCallError('CAMERA/MIC ACCESS BLOCKED. BROWSER SANDBOXING PREVENTS WEBCAM/MIC USAGE INSIDE THE IFRAME. PLEASE LAUNCH CRACKCHAT IN A STANDALONE NEW TAB TO ENABLE VOICE & VIDEO CALLS!');
+            errMsg.includes('permission');
+
+          if (isPermissionDenied) {
+            console.warn("Iframe container sandbox blocked physical camera/mic access. Gracefully pivoting to automated Virtual Cyber-Feed fallback to enable WebRTC signal testing.");
+            setUsingVirtualCallStream(true);
+            setCallError('SANDBOX ACCESS RESTRICTED: Automatically redirected to the interactive Cyber Virtual Feed for seamless WebRTC communication testing. To use real camera/mic devices, please launch this application in a new standalone browser tab.');
           } else {
+            console.error("Media & RTC Initialization Error:", err);
             setCallError('FAILED TO INITIALIZE MEDIA DEVICE: ' + (err?.message || err?.name || String(err)) + '. MAKE SURE NO OTHER APPLICATION IS USING YOUR CAMERA/MIC.');
           }
         }
@@ -1319,12 +1344,18 @@ function ChatApp() {
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch(e => {
+        console.warn("Autoplay programmatic start failed on remote video element (ordinary browser sandbox policy):", e);
+      });
     }
   }, [remoteStream]);
 
   useEffect(() => {
     if (remoteAudioRef.current && remoteStream) {
       remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.play().catch(e => {
+        console.warn("Autoplay programmatic start failed on remote audio element (ordinary browser sandbox policy):", e);
+      });
     }
   }, [remoteStream]);
 
@@ -2899,7 +2930,7 @@ function ChatApp() {
                 </div>
 
                 {/* Invisible audio element to play remote stream audio */}
-                <audio ref={remoteAudioRef} autoPlay style={{ display: 'none' }} />
+                <audio ref={remoteAudioRef} autoPlay className="sr-only" />
 
               </div>
             </motion.div>
