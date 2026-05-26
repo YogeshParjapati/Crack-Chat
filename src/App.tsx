@@ -124,6 +124,180 @@ const THEMES = [
   { name: 'Ghibli Valley 🎋', class: 'theme-anime-bamboo-forest', color: '#10b981', vibe: 'SUMMER CHILL', bgImage: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1920&auto=format&fit=crop' },
 ];
 
+const CURATED_GIFS = [
+  {
+    id: 'cg_hack',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3ZleDRoMWdycGptNnlmbTh6ZnU3eHJmNzRxazEwbWpsY2M0OWx5ayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Y3Frv9v6M3Be8/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3ZleDRoMWdycGptNnlmbTh6ZnU3eHJmNzRxazEwbWpsY2M0OWx5ayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Y3Frv9v6M3Be8/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_city',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Y4NTh6bXF0NWhnaGdtNHUydDJtd2FpeGV4bWZ4cXBsc2l6eWdzZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0O9xbeIgOPe27ST6/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Y4NTh6bXF0NWhnaGdtNHUydDJtd2FpeGV4bWZ4cXBsc2l6eWdzZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0O9xbeIgOPe27ST6/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_dance',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbDVqbmZoc2g4cGxqaWhrMWZodTF6dzFmNTFjZXZ2cjhhMXk1ZGNvYiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/GeimqsH0TLDt4tScGw/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbDVqbmZoc2g4cGxqaWhrMWZodTF6dzFmNTFjZXZ2cjhhMXk1ZGNvYiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/GeimqsH0TLDt4tScGw/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_blown',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeHpvNDlzdGg2OWM5Z2g1bTNzZTF5NDQ1amM5ajE2bnh5cGxlOGo1cCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Um3ljJl8jfqYI59pRL/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeHpvNDlzdGg2OWM5Z2g1bTNzZTF5NDQ1amM5ajE2bnh5cGxlOGo1cCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Um3ljJl8jfqYI59pRL/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_cheers',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcm5nMXdrdjkwNWJpdTlvMGJjdGN0NHM4Nnh6ZWwzd3p0NTgxdXZscCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/g9582DNuQppazNM4SZ/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcm5nMXdrdjkwNWJpdTlvMGJjdGN0NHM4Nnh6ZWwzd3p0NTgxdXZscCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/g9582DNuQppazNM4SZ/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_popcorn',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeTI4MHB2ZDNmNzkwNHM2Znkwbm40ZnpkdXR0eWhleHh6Zzl1ZXJ6NyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/hVTouqNmqhEAs/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeTI4MHB2ZDNmNzkwNHM2Znkwbm40ZnpkdXR0eWhleHh6Zzl1ZXJ6NyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/hVTouqNmqhEAs/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_lofi',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXl2ZXdyZnJrdzNpZDFzbjNzZ3F5NW9wYmpyejY0NXh2OTI2OHFvaSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/HteV6h0c0HNJK/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXl2ZXdyZnJrdzNpZDFzbjNzZ3F5NW9wYmpyejY0NXh2OTI2OHFvaSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/HteV6h0c0HNJK/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_success',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExenI4NnV5ZHN5bzRxZXAxcjA3Mzd2dTZtczhhdTlkMTVkNXJqNzN1dCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/t3s3G2TXEFrLa/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExenI4NnV5ZHN5bzRxZXAxcjA3Mzd2dTZtczhhdTlkMTVkNXJqNzN1dCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/t3s3G2TXEFrLa/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_rage',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Y1bThna2d2cjB4cHI2bXZodTczMXR6YjdkaTJxdjI3a2U2ZjRneSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/XIqCQx02EwB2g/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Y1bThna2d2cjB4cHI2bXZodTczMXR6YjdkaTJxdjI3a2U2ZjRneSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/XIqCQx02EwB2g/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_fireworks',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdWp3ZnRnbmVhMTJubDR3c3Q0bGl0MGFsbGpxODNjcDdzbm9ia3oxdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26tOZ42cX5VIFGMTK/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdWp3ZnRnbmVhMTJubDR3c3Q0bGl0MGFsbGpxODNjcDdzbm9ia3oxdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26tOZ42cX5VIFGMTK/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_spidey',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMWNnZXZxMTNzNXZpNWs1Zm15MzF0cWRhMmsyd25wOTBrZjJ0czV2dSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l36kU80xPf0ojG0Lm/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMWNnZXZxMTNzNXZpNWs1Zm15MzF0cWRhMmsyd25wOTBrZjJ0czV2dSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l36kU80xPf0ojG0Lm/giphy.gif' }
+    }
+  },
+  {
+    id: 'cg_clap',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZnAyNHlqNWtnaG96aTNpeHNtNGJ3MGIxaG8xbjd0cDB6aGs0dDExaiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/kd9BlRovbPOykLBMqX/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZnAyNHlqNWtnaG96aTNpeHNtNGJ3MGIxaG8xbjd0cDB6aGs0dDExaiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/kd9BlRovbPOykLBMqX/giphy.gif' }
+    }
+  }
+];
+
+const CURATED_STICKERS = [
+  {
+    id: 'cs_fire',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDZ6ZmQyZDNzY3J3MXphdmNnYmZ4ZzBnbTVxNmYxZTZ6cGx4cm1tMCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Y08bx6Fea1ZgOo7m9d/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDZ6ZmQyZDNzY3J3MXphdmNnYmZ4ZzBnbTVxNmYxZTZ6cGx4cm1tMCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Y08bx6Fea1ZgOo7m9d/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_welcome',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjVycnQ5bjdrZHp4c2o1Z2tnaWN1ZXZuMXR6b2JhcXo5ajRrdThpNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Vff5Qxz6LLzag/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjVycnQ5bjdrZHp4c2o1Z2tnaWN1ZXZuMXR6b2JhcXo5ajRrdThpNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Vff5Qxz6LLzag/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_gamer',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbzVyZWp1ZzRwcmg3NmtwamlwaW9xMmY5amtzYmNjNGM2dzlxejExZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/gGxZ98g01fbyM/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbzVyZWp1ZzRwcmg3NmtwamlwaW9xMmY5amtzYmNjNGM2dzlxejExZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/gGxZ98g01fbyM/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_ok',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNWZ4c2c5dmRxaXhkdG9pcXBtZXZpZzVvMTc4ZzRlOG10czM5dzA3MiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3NtY188QaxDdC/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNWZ4c2c5dmRxaXhkdG9pcXBtZXZpZzVvMTc4ZzRlOG10czM5dzA3MiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3NtY188QaxDdC/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_glasses',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3FvdjE0Nzc1MTZndTVrdzZreXhrZWZndXp6NDVxa243eWp2MmQ1NSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/iN79p9x49DLaU/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3FvdjE0Nzc1MTZndTVrdzZreXhrZWZndXp6NDVxa243eWp2MmQ1NSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/iN79p9x49DLaU/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_heart',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc29lZWtsZ2l5YW5hOTQzYW0xbThhZDBsY29jZDRoamMxdjFtdHh5OSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/unfHhVWqAg6Y0/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc29lZWtsZ2l5YW5hOTQzYW0xbThhZDBsY29jZDRoamMxdjFtdHh5OSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/unfHhVWqAg6Y0/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_crown',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcmAxaGdmcXBnaDRxMzZmaDNhbWswdmkzemNlNjV6YXE2dnY1bzR6NCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/N18fQjAs6w0Q/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcmAxaGdmcXBnaDRxMzZmaDNhbWswdmkzemNlNjV6YXE2dnY1bzR6NCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/N18fQjAs6w0Q/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_sparkles',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNGdyMng5aG4wM25ud3g2dnVteG4zaDYxajhyam9rd3V1NDgxb2JpMyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7qDQ4bY9S3Mw9COA/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNGdyMng5aG4wM25ud3g2dnVteG4zaDYxajhyam9rd3V1NDgxb2JpMyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7qDQ4bY9S3Mw9COA/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_emoji_laughing',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmQxOGoxNGxteWdrZTF1bjZ6Mm1ubTExZ3lzcjUweHZxeGNsdmltNCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26gR1vv96uT6WfIre/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmQxOGoxNGxteWdrZTF1bjZ6Mm1ubTExZ3lzcjUweHZxeGNsdmltNCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26gR1vv96uT6WfIre/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_cat_wave',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNWYyYm9ubmtuOHh4Zmh4cXoxcnJ3YjRmeGNzMXRlYXZiMXlsZmpsZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/13CoXDiaCcX2uI/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNWYyYm9ubmtuOHh4Zmh4cXoxcnJ3YjRmeGNzMXRlYXZiMXlsZmpsZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/13CoXDiaCcX2uI/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_dance_party',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3N2NXN2YnVndmFvM2d4N3FqandkaGJtZTgxdGlidGxtZmF2YWhjdCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/9ggYpn69unA3e/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3N2NXN2YnVndmFvM2d4N3FqandkaGJtZTgxdGlidGxtZmF2YWhjdCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/9ggYpn69unA3e/giphy.gif' }
+    }
+  },
+  {
+    id: 'cs_neon_cat',
+    images: {
+      fixed_height: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3drZnE2YnhyNTN6eGN5cWszOHRhcmcxMTF1OHU3YmsxcDVmMXg5bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0O5Ar4T8O9fW8e68/giphy.gif' },
+      fixed_height_small: { url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3drZnE2YnhyNTN6eGN5cWszOHRhcmcxMTF1OHU3YmsxcDVmMXg5bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0O5Ar4T8O9fW8e68/giphy.gif' }
+    }
+  }
+];
+
 export default function App() {
   return (
     <ChatApp />
@@ -976,16 +1150,28 @@ function ChatApp() {
 
   const searchGifs = async (isTrending = false) => {
     const type = isStickerMode ? 'stickers' : 'gifs';
-    const endpoint = (isTrending || !gifSearch.trim()) ? 'trending' : 'search';
-    const query = (isTrending || !gifSearch.trim()) ? '' : `&q=${encodeURIComponent(gifSearch)}`;
+    
+    if (isTrending || !gifSearch.trim()) {
+      setGifs(isStickerMode ? CURATED_STICKERS : CURATED_GIFS);
+      setIsMediaLoading(false);
+      return;
+    }
+
+    const endpoint = 'search';
+    const query = `&q=${encodeURIComponent(gifSearch)}`;
     
     setIsMediaLoading(true);
     try {
       const res = await fetch(`https://api.giphy.com/v1/${type}/${endpoint}?api_key=dc6zaTOxFJmzC${query}&limit=24`);
       const data = await res.json();
-      setGifs(data.data || []);
+      if (data && data.data && data.data.length > 0) {
+        setGifs(data.data);
+      } else {
+        setGifs(isStickerMode ? CURATED_STICKERS : CURATED_GIFS);
+      }
     } catch (e) {
-      console.error("Media search failed", e);
+      console.error("Media search failed, falling back to curated assets", e);
+      setGifs(isStickerMode ? CURATED_STICKERS : CURATED_GIFS);
     } finally {
       setIsMediaLoading(false);
     }
@@ -1481,7 +1667,17 @@ function ChatApp() {
                       {msg.text}
                     </div>
                   )}
-                  {(msg.type === 'gif' || msg.type === 'sticker' || msg.type === 'image') && (
+                  {msg.type === 'sticker' && (
+                    <div className="transition-all duration-500 hover:scale-110 active:scale-95 cursor-pointer max-w-[200px] py-1 select-none">
+                      <img 
+                        src={msg.url} 
+                        alt="sticker" 
+                        className="max-w-[140px] max-h-[140px] md:max-w-[180px] md:max-h-[180px] object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] md:drop-shadow-[0_0_20px_var(--crack-orange)]/30 filter transition-all duration-300"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  )}
+                  {(msg.type === 'gif' || msg.type === 'image') && (
                     <div className="transition-all duration-500">
                       <img 
                         src={msg.url} 
@@ -1584,7 +1780,12 @@ function ChatApp() {
                       key={gif.id}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="relative aspect-square bg-zinc-800 rounded-sm overflow-hidden cursor-pointer group"
+                      className={cn(
+                        "relative aspect-square rounded-sm overflow-hidden cursor-pointer group transition-all border border-white/5",
+                        isStickerMode 
+                          ? "bg-[linear-gradient(45deg,#18181b_25%,transparent_25%),linear-gradient(-45deg,#18181b_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#18181b_75%),linear-gradient(-45deg,transparent_75%,#18181b_75%)] bg-[size:10px_10px] bg-[position:0_0,0_5px,5px_-5px,-5px_0] bg-zinc-900 hover:border-[var(--crack-orange)]/40 hover:shadow-[0_0_12px_rgba(255,255,255,0.05)]" 
+                          : "bg-zinc-800 hover:border-[var(--crack-orange)]/30"
+                      )}
                       onClick={() => handleSendMessage(undefined, { 
                          type: isStickerMode ? 'sticker' : 'gif', 
                          url: gif.images.fixed_height.url, 
@@ -1593,7 +1794,10 @@ function ChatApp() {
                     >
                       <img 
                         src={gif.images.fixed_height_small.url}
-                        className="w-full h-full object-cover"
+                        className={cn(
+                          "w-full h-full transition-transform duration-300 group-hover:scale-110",
+                          isStickerMode ? "object-contain p-2" : "object-cover"
+                        )}
                         referrerPolicy="no-referrer"
                         loading="lazy"
                       />
