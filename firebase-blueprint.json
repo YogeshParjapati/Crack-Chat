@@ -41,6 +41,10 @@
             "text": { "type": "string" },
             "sender": { "type": "string" }
           }
+        },
+        "reactions": {
+          "type": "object",
+          "description": "A map where keys are emojis and values are lists of users who reacted"
         }
       },
       "required": ["text", "sender", "color", "type", "timestamp", "uid"]

@@ -84,7 +84,10 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if true;
         allow create: if true;
-        allow update: if false;
+        allow update: if isAuthenticated() && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) ||
+          isAdmin()
+        );
         allow delete: if true;
       }
 

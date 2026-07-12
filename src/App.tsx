@@ -34,6 +34,12 @@ interface Message {
     text: string;
     sender: string;
   };
+  reactions?: {
+    [emoji: string]: {
+      uid: string;
+      username: string;
+    }[];
+  };
 }
 
 interface Room {
@@ -486,6 +492,7 @@ function ChatApp() {
   const [isMediaLoading, setIsMediaLoading] = useState(false);
   const [roomSearch, setRoomSearch] = useState('');
   const [replyTo, setReplyTo] = useState<{ text: string; sender: string } | null>(null);
+  const [openReactionMsgId, setOpenReactionMsgId] = useState<string | null>(null);
   const [fullscreenMedia, setFullscreenMedia] = useState<{ url: string; type: 'image' | 'video' | 'gif' | 'sticker' } | null>(null);
   const [callState, setCallState] = useState<{ type: 'voice' | 'video'; status: 'calling' | 'incoming' | 'active'; peer?: string; callId?: string } | null>(null);
   
@@ -1291,6 +1298,41 @@ function ChatApp() {
     }
   };
 
+  const handleReactToMessage = async (messageId: string, emoji: string) => {
+    if (!currentRoom || !userId) return;
+
+    try {
+      const messageRef = doc(db, `rooms/${currentRoom.id}/messages`, messageId);
+      const targetMsg = messages.find(m => m.id === messageId);
+      if (!targetMsg) return;
+
+      const currentReactions = targetMsg.reactions || {};
+      const emojiUsers = currentReactions[emoji] || [];
+
+      const existingReactionIndex = emojiUsers.findIndex(u => u.uid === userId);
+      const newUsers = [...emojiUsers];
+
+      if (existingReactionIndex > -1) {
+        newUsers.splice(existingReactionIndex, 1);
+      } else {
+        newUsers.push({ uid: userId, username: username || 'Anonymous' });
+      }
+
+      const updatedReactions = {
+        ...currentReactions,
+        [emoji]: newUsers
+      };
+
+      if (newUsers.length === 0) {
+        delete updatedReactions[emoji];
+      }
+
+      await setDoc(messageRef, { reactions: updatedReactions }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `rooms/${currentRoom.id}/messages/${messageId}`);
+    }
+  };
+
   const handleSendMessage = async (e?: React.FormEvent, customData?: Partial<Message>) => {
     e?.preventDefault();
     if ((inputText.trim() || customData) && isJoined && currentRoom) {
@@ -1691,18 +1733,63 @@ function ChatApp() {
 
   if (!isJoined) {
     return (
-      <div className={cn("min-h-screen bg-[var(--crack-bg)] text-white flex flex-col items-center justify-start md:justify-center p-4 md:p-8 font-sans transition-all duration-700 relative overflow-y-auto scrollbar-hide", currentTheme.class)}>
+      <div className={cn("min-h-screen bg-[var(--crack-bg)] text-white flex flex-col items-center justify-start md:justify-center p-4 md:p-8 font-sans transition-all duration-700 relative overflow-y-auto overflow-x-hidden scrollbar-hide", currentTheme.class)}>
+        {/* Floating Ambient Glass Bubbles */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+          <motion.div 
+            animate={{
+              x: [0, 45, -25, 0],
+              y: [0, -55, 35, 0],
+              scale: [1, 1.18, 0.88, 1],
+            }}
+            transition={{
+              duration: 22,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className="absolute top-1/4 left-1/4 w-[350px] h-[350px] rounded-full blur-[130px] opacity-[0.22] transition-colors duration-1000"
+            style={{ backgroundColor: 'var(--crack-orange)' }}
+          />
+          <motion.div 
+            animate={{
+              x: [0, -45, 35, 0],
+              y: [0, 45, -45, 0],
+              scale: [1, 0.88, 1.15, 1],
+            }}
+            transition={{
+              duration: 26,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full blur-[150px] opacity-[0.16] transition-colors duration-1000"
+            style={{ backgroundColor: 'var(--crack-orange)' }}
+          />
+          <motion.div 
+            animate={{
+              x: [0, 30, -30, 0],
+              y: [0, 35, -20, 0],
+            }}
+            transition={{
+              duration: 18,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className="absolute top-1/3 right-1/3 w-[250px] h-[250px] rounded-full blur-[110px] opacity-[0.11] bg-blue-500"
+          />
+        </div>
+
         {currentTheme.bgImage && (
           <div 
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 z-0"
             style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.15 }}
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/80 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/80 pointer-events-none z-0" />
         
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 100, damping: 15 }}
           className="max-w-4xl w-full my-auto space-y-8 md:space-y-12 relative z-10 py-6"
         >
           <div className="text-center space-y-3">
@@ -1710,9 +1797,9 @@ function ChatApp() {
               initial={{ scale: 0.8, filter: 'blur(10px)' }}
               animate={{ scale: 1, filter: 'blur(0px)' }}
               onDoubleClick={() => setShowAdminPanel(true)}
-              className="text-5xl sm:text-7xl md:text-9xl font-black tracking-tighter uppercase italic text-white break-words cursor-pointer select-none"
+              className="text-5xl sm:text-7xl md:text-9xl font-black tracking-tighter uppercase italic text-white break-words cursor-pointer select-none drop-shadow-[0_0_35px_rgba(255,255,255,0.06)]"
             >
-              CRACK<span className="text-[var(--crack-orange)]">CHAT</span>
+              CRACK<span className="text-[var(--crack-orange)] drop-shadow-[0_0_30px_rgba(var(--crack-orange),0.25)]">CHAT</span>
             </motion.h1>
             <p className="text-zinc-400 text-xs sm:text-sm md:text-base uppercase tracking-[0.3em] md:tracking-[0.5em] font-mono animate-pulse">
               A real-time chat platform
@@ -1721,32 +1808,40 @@ function ChatApp() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-12 w-full">
             {/* Left: Identity */}
-            <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/5 p-5 md:p-8 space-y-6 md:space-y-8 rounded-sm shadow-2xl">
-              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter border-b border-white/10 pb-3 md:pb-4">Identity</h2>
+            <motion.div 
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, type: "spring", bounce: 0.2, delay: 0.1 }}
+              className="bg-white/[0.02] backdrop-blur-3xl border border-white/10 p-6 md:p-8 space-y-6 md:space-y-8 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-white/15 transition-all duration-300"
+            >
+              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter border-b border-white/10 pb-3 md:pb-4 flex items-center justify-between">
+                <span>Identity</span>
+                <User className="w-5 h-5 text-zinc-500" />
+              </h2>
               
               <div className="space-y-4 md:space-y-6">
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
+                <div className="relative group">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5 group-focus-within:text-[var(--crack-orange)] transition-colors" />
                   <input
                     type="text"
                     placeholder="CODENAME"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 py-4 md:py-5 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase text-base md:text-lg transition-all"
+                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 py-4 md:py-5 pl-12 pr-4 focus:outline-none focus:border-[var(--crack-orange)] focus:ring-1 focus:ring-[var(--crack-orange)]/30 font-mono uppercase text-base md:text-lg transition-all rounded-xl"
                   />
                 </div>
               </div>
               
               <div className="space-y-3 md:space-y-4">
-                <label className="text-xs text-zinc-400 uppercase font-black tracking-widest">Select Vibe</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[170px] md:max-h-[195px] overflow-y-auto pr-1 scrollbar-thin">
+                <label className="text-xs text-zinc-400 uppercase font-black tracking-widest block">Select Vibe</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[170px] md:max-h-[195px] overflow-y-auto pr-1 scrollbar-thin">
                   {THEMES.map(t => (
                     <button
                       key={t.name}
                       type="button"
                       onClick={() => setCurrentTheme(t)}
                       className={cn(
-                        "flex items-center space-x-2 p-2 px-2.5 border transition-all text-left bg-black/40 hover:bg-black/20 group cursor-pointer relative overflow-hidden",
+                        "flex items-center space-x-2 p-2.5 px-3 border transition-all text-left bg-white/[0.02] hover:bg-white/[0.05] group cursor-pointer relative overflow-hidden rounded-xl",
                         currentTheme.name === t.name ? "border-white scale-[1.02] bg-white/5 shadow-[0_0_15px_rgba(255,255,255,0.05)]" : "border-white/5 opacity-60 hover:opacity-100"
                       )}
                       style={{ 
@@ -1769,17 +1864,22 @@ function ChatApp() {
                   ))}
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Right: Rooms */}
-            <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/5 p-5 md:p-8 flex flex-col space-y-4 md:space-y-6 rounded-sm shadow-2xl">
+            <motion.div 
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, type: "spring", bounce: 0.2, delay: 0.1 }}
+              className="bg-white/[0.02] backdrop-blur-3xl border border-white/10 p-6 md:p-8 flex flex-col space-y-4 md:space-y-6 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-white/15 transition-all duration-300"
+            >
               <div className="flex items-center justify-between border-b border-white/10 pb-3 md:pb-4">
                 <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter">Rooms</h2>
                 <button 
                   onClick={() => setShowRoomCreate(!showRoomCreate)}
-                  className="text-zinc-500 hover:text-white transition-all hover:scale-110"
+                  className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 text-zinc-400 hover:text-white transition-all hover:scale-110 rounded-lg cursor-pointer"
                 >
-                  <Plus className="w-5 h-5 md:w-6 md:h-6" />
+                  <Plus className="w-5 h-5 md:w-5 md:h-5" />
                 </button>
               </div>
 
@@ -1792,7 +1892,7 @@ function ChatApp() {
                   placeholder="SEARCH ROOMS..." 
                   value={roomSearch}
                   onChange={(e) => setRoomSearch(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 p-2.5 pl-9 text-[10.5px] md:text-xs focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
+                  className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 p-2.5 pl-9 text-[10.5px] md:text-xs focus:outline-none focus:border-[var(--crack-orange)] focus:ring-1 focus:ring-[var(--crack-orange)]/30 font-mono uppercase transition-all rounded-xl"
                 />
               </div>
 
@@ -1803,55 +1903,58 @@ function ChatApp() {
                     placeholder="ROOM NAME"
                     value={newRoomName}
                     onChange={(e) => setNewRoomName(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 p-3 md:p-4 text-xs md:text-sm focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
+                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 p-3 md:p-4 text-xs md:text-sm focus:outline-none focus:border-[var(--crack-orange)] focus:ring-1 focus:ring-[var(--crack-orange)]/30 font-mono uppercase transition-all rounded-xl"
                   />
                   <input
                     type="password"
                     placeholder="PASSWORD (OPTIONAL)"
                     value={newRoomPass}
                     onChange={(e) => setNewRoomPass(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 p-3 md:p-4 text-xs md:text-sm focus:outline-none focus:border-[var(--crack-orange)] font-mono uppercase transition-all"
+                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 p-3 md:p-4 text-xs md:text-sm focus:outline-none focus:border-[var(--crack-orange)] focus:ring-1 focus:ring-[var(--crack-orange)]/30 font-mono uppercase transition-all rounded-xl"
                   />
                   <div className="flex gap-2.5">
-                    <button type="submit" className="flex-1 bg-[var(--crack-orange)] text-black font-black uppercase py-2.5 md:py-3 text-xs md:text-sm hover:brightness-110 transition-all">Create</button>
-                    <button type="button" onClick={() => setShowRoomCreate(false)} className="px-4 md:px-6 border border-white/10 text-[10px] md:text-xs uppercase hover:bg-white/5 transition-colors">Cancel</button>
+                    <button type="submit" className="flex-1 bg-[var(--crack-orange)] text-black font-black uppercase py-2.5 md:py-3 text-xs md:text-sm hover:brightness-110 hover:scale-[1.02] active:scale-[0.98] transition-all rounded-xl cursor-pointer">Create</button>
+                    <button type="button" onClick={() => setShowRoomCreate(false)} className="px-4 md:px-6 border border-white/10 text-[10px] md:text-xs uppercase hover:bg-white/5 rounded-xl transition-all cursor-pointer">Cancel</button>
                   </div>
                 </form>
               ) : (
-                <div className="flex-1 overflow-y-auto max-h-[190px] md:max-h-[250px] space-y-2 pr-1 scrollbar-hide">
-                  {rooms.filter(r => r.name.toLowerCase().includes(roomSearch.toLowerCase())).map(room => (
-                    <div 
+                <div className="flex-1 overflow-y-auto max-h-[190px] md:max-h-[250px] space-y-2.5 pr-1 scrollbar-hide">
+                  {rooms.filter(r => r.name.toLowerCase().includes(roomSearch.toLowerCase())).map((room, idx) => (
+                    <motion.div 
                       key={room.id}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: idx * 0.05 }}
                       onClick={() => !room.hasPassword && handleJoinRoom(room, '')}
-                      className="group flex items-center justify-between bg-white/5 p-3 md:p-4 border border-white/5 hover:border-white/20 hover:bg-white/10 transition-all cursor-pointer relative overflow-hidden"
+                      className="group flex items-center justify-between bg-white/[0.02] p-3 md:p-4 border border-white/5 hover:border-white/15 hover:bg-white/[0.06] rounded-xl transition-all duration-300 cursor-pointer relative overflow-hidden active:scale-[0.99]"
                     >
                       <div className="flex items-center space-x-2.5 md:space-x-3 relative z-10 min-w-0 flex-1 mr-2">
-                        <Hash className="w-4 h-4 md:w-5 md:h-5 text-zinc-600 group-hover:text-white transition-colors flex-shrink-0" />
+                        <Hash className="w-4 h-4 md:w-5 md:h-5 text-zinc-500 group-hover:text-white transition-colors flex-shrink-0" />
                         <span className="text-sm md:text-base font-black uppercase tracking-tighter truncate">{room.name}</span>
-                        {room.hasPassword && <Lock className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" />}
+                        {room.hasPassword && <Lock className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />}
                       </div>
                       <div className="flex items-center space-x-2 relative z-10 flex-shrink-0">
                         {room.hasPassword && (
                           <input 
                             type="password" 
                             placeholder="PASS" 
-                            className="w-14 sm:w-20 bg-black/50 border border-white/10 text-[9px] md:text-[10px] p-1.5 focus:outline-none focus:border-[var(--crack-orange)] transition-all"
+                            className="w-14 sm:w-20 bg-white/[0.03] backdrop-blur-md border border-white/10 text-[9px] md:text-[10px] p-1.5 focus:outline-none focus:border-[var(--crack-orange)] rounded-lg transition-all"
                             onChange={(e) => setJoinPass(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                           />
                         )}
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleJoinRoom(room, joinPass); }}
-                          className="text-[10px] md:text-xs font-black uppercase text-white md:opacity-0 md:group-hover:opacity-100 transition-all hover:scale-110 px-2 py-1 bg-white/5 md:bg-transparent rounded-sm"
+                          className="text-[10px] md:text-xs font-black uppercase text-white md:opacity-0 md:group-hover:opacity-100 transition-all hover:scale-110 px-2.5 py-1 bg-white/5 md:bg-white/10 hover:bg-[var(--crack-orange)] hover:text-black rounded-lg cursor-pointer font-bold"
                         >
                           Join
                         </button>
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               )}
-            </div>
+            </motion.div>
           </div>
         </motion.div>
       </div>
@@ -1866,6 +1969,50 @@ function ChatApp() {
       <AnimatePresence>
       </AnimatePresence>
 
+      {/* Floating Ambient Glass Bubbles */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <motion.div 
+          animate={{
+            x: [0, 45, -25, 0],
+            y: [0, -55, 35, 0],
+            scale: [1, 1.18, 0.88, 1],
+          }}
+          transition={{
+            duration: 22,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className="absolute top-1/4 left-1/4 w-[350px] h-[350px] rounded-full blur-[130px] opacity-[0.18] transition-colors duration-1000 z-0"
+          style={{ backgroundColor: 'var(--crack-orange)' }}
+        />
+        <motion.div 
+          animate={{
+            x: [0, -45, 35, 0],
+            y: [0, 45, -45, 0],
+            scale: [1, 0.88, 1.15, 1],
+          }}
+          transition={{
+            duration: 26,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full blur-[150px] opacity-[0.14] transition-colors duration-1000 z-0"
+          style={{ backgroundColor: 'var(--crack-orange)' }}
+        />
+        <motion.div 
+          animate={{
+            x: [0, 30, -30, 0],
+            y: [0, 35, -20, 0],
+          }}
+          transition={{
+            duration: 18,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className="absolute top-1/3 right-1/3 w-[250px] h-[250px] rounded-full blur-[110px] opacity-[0.09] bg-blue-500 z-0"
+        />
+      </div>
+
       {currentTheme.bgImage && (
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
@@ -1875,7 +2022,7 @@ function ChatApp() {
       <div className="absolute inset-0 bg-black/60 pointer-events-none" />
 
       {/* Sidebar - Desktop */}
-      <div className="hidden md:flex w-64 border-r border-white/5 flex-col p-6 space-y-8 bg-black/40 backdrop-blur-2xl relative z-10">
+      <div className="hidden md:flex w-64 border-r border-white/10 flex-col p-6 space-y-8 bg-neutral-950/20 backdrop-blur-3xl relative z-10">
         <SidebarContent 
           rooms={rooms} 
           currentRoom={currentRoom} 
@@ -1906,7 +2053,8 @@ function ChatApp() {
               initial={{ x: -300 }}
               animate={{ x: 0 }}
               exit={{ x: -300 }}
-              className="fixed inset-y-0 left-0 w-72 bg-[var(--crack-bg)] border-r border-white/10 z-50 p-6 flex flex-col space-y-8 md:hidden"
+              transition={{ type: "spring", damping: 20 }}
+              className="fixed inset-y-0 left-0 w-72 bg-neutral-950/45 backdrop-blur-3xl border-r border-white/10 z-50 p-6 flex flex-col space-y-8 md:hidden shadow-[0_0_50px_rgba(0,0,0,0.6)]"
             >
               <SidebarContent 
                 rooms={rooms} 
@@ -1930,11 +2078,11 @@ function ChatApp() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col relative z-10 w-full overflow-hidden">
         {/* Header */}
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-6 bg-black/60 backdrop-blur-2xl z-20 shadow-lg">
+        <header className="h-16 border-b border-white/10 flex items-center justify-between px-4 md:px-6 bg-neutral-950/20 backdrop-blur-2xl z-20 shadow-[0_4px_30px_rgba(0,0,0,0.15)]">
           <div className="flex items-center space-x-3">
             <button 
               onClick={() => setShowMobileSidebar(true)}
-              className="md:hidden text-zinc-400 hover:text-white transition-colors"
+              className="md:hidden text-zinc-400 hover:text-white transition-all hover:scale-110 active:scale-95 cursor-pointer"
             >
               <Zap className="w-6 h-6" />
             </button>
@@ -2010,27 +2158,69 @@ function ChatApp() {
                     Replying to <span className="font-bold">{msg.replyTo.sender}</span>: {msg.replyTo.text.substring(0, 30)}...
                   </div>
                 )}
-                <div className="flex items-baseline space-x-2">
+                <div className="flex items-center space-x-2 relative">
                   <span className={cn("text-[10px] md:text-xs font-black uppercase tracking-tighter", msg.color)}>
                     {msg.sender}
                   </span>
                   <span className="text-[8px] md:text-[9px] text-zinc-600 font-mono">
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
-                  {(isAdmin || msg.uid === userId) && (
+                  
+                  {/* Message action icons container (always visible or on hover) */}
+                  <div className="opacity-0 group-hover:opacity-100 max-md:opacity-100 transition-all duration-200 flex items-center space-x-1.5 ml-1">
                     <button 
-                      onClick={() => handleDeleteMessage(msg.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-red-500"
-                      title="Delete Message"
+                      onClick={() => setOpenReactionMsgId(openReactionMsgId === msg.id ? null : msg.id)}
+                      className="text-zinc-600 hover:text-[var(--crack-orange)] hover:scale-110 active:scale-95 transition-all cursor-pointer p-0.5 rounded"
+                      title="React to Message"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Smile className="w-3.5 h-3.5" />
                     </button>
-                  )}
+                    {(isAdmin || msg.uid === userId) && (
+                      <button 
+                        onClick={() => handleDeleteMessage(msg.id)}
+                        className="text-zinc-600 hover:text-red-500 hover:scale-110 active:scale-95 transition-all cursor-pointer p-0.5 rounded"
+                        title="Delete Message"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Absolute Floating Reaction Picker */}
+                  <AnimatePresence>
+                    {openReactionMsgId === msg.id && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.85, y: -8 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.85, y: -8 }}
+                        className="absolute z-40 top-5 left-12 bg-neutral-950/95 backdrop-blur-3xl border border-white/15 p-1 rounded-full flex items-center space-x-1 shadow-[0_10px_30px_rgba(0,0,0,0.75)]"
+                      >
+                        {['👍', '❤️', '😂', '😮', '😢', '🔥'].map(emoji => (
+                          <button
+                            key={emoji}
+                            onClick={() => {
+                              handleReactToMessage(msg.id, emoji);
+                              setOpenReactionMsgId(null);
+                            }}
+                            className="w-7 h-7 flex items-center justify-center hover:bg-white/10 rounded-full text-sm active:scale-125 transition-transform cursor-pointer"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => setOpenReactionMsgId(null)}
+                          className="w-5 h-5 flex items-center justify-center hover:bg-white/10 rounded-full text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
                 
                 <div className="max-w-[90%] md:max-w-2xl">
                   {msg.type === 'text' && (
-                    <div className="text-zinc-300 text-sm leading-relaxed bg-white/5 backdrop-blur-sm p-4 border-l-2 border-white/20 transition-all duration-500 hover:bg-white/10 hover:translate-x-1 shadow-xl break-words whitespace-pre-wrap">
+                    <div className="text-zinc-200 text-sm leading-relaxed bg-white/[0.03] backdrop-blur-md p-4 rounded-2xl border border-white/10 border-l-[3px] border-l-[var(--crack-orange)] hover:bg-white/[0.07] hover:border-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.02)] hover:translate-x-1 transition-all duration-300 break-words whitespace-pre-wrap">
                       {msg.text}
                     </div>
                   )}
@@ -2091,6 +2281,45 @@ function ChatApp() {
                       <VoiceNotePlayer url={msg.url || ''} />
                     </div>
                   )}
+
+                  {/* Reactions Badges */}
+                  {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2 pl-0.5">
+                      {Object.entries(msg.reactions).map(([emoji, rawUsers]) => {
+                        const users = (rawUsers || []) as { uid: string; username: string }[];
+                        if (users.length === 0) return null;
+                        const hasReacted = users.some(u => u.uid === userId);
+                        const userNames = users.map(u => u.username).join(', ');
+                        
+                        return (
+                          <div
+                            key={emoji}
+                            className="group/react relative"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleReactToMessage(msg.id, emoji)}
+                              className={cn(
+                                "flex items-center space-x-1 px-2 py-0.5 rounded-full text-xs border transition-all duration-200 cursor-pointer active:scale-95",
+                                hasReacted 
+                                  ? "bg-[var(--crack-orange)]/15 border-[var(--crack-orange)]/45 text-[var(--crack-orange)] shadow-[0_0_10px_rgba(249,115,22,0.1)] hover:bg-[var(--crack-orange)]/25"
+                                  : "bg-white/[0.03] border-white/10 text-zinc-400 hover:border-white/20 hover:bg-white/[0.06]"
+                              )}
+                            >
+                              <span className="text-sm select-none">{emoji}</span>
+                              <span className="text-[10px] font-black font-mono">{users.length}</span>
+                            </button>
+                            
+                            {/* Glassmorphic tooltip for list of users who reacted */}
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/react:block bg-neutral-950/95 border border-white/15 px-2.5 py-1 rounded-md text-[9px] text-zinc-300 whitespace-nowrap z-50 shadow-[0_8px_20px_rgba(0,0,0,0.8)] pointer-events-none">
+                              <span className="font-extrabold text-[var(--crack-orange)] uppercase tracking-wider text-[8px] mr-1">Reacted:</span>
+                              <span className="font-medium text-zinc-100">{userNames}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}
@@ -2121,29 +2350,29 @@ function ChatApp() {
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="absolute bottom-24 left-4 md:left-6 z-30 w-[calc(100%-2rem)] max-w-[380px] bg-zinc-900 border border-zinc-800 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-lg"
+              className="absolute bottom-24 left-4 md:left-6 z-30 w-[calc(100%-2rem)] max-w-[380px] bg-neutral-950/25 backdrop-blur-3xl border border-white/10 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.55)] rounded-2xl"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-4">
                   <button 
                     onClick={() => { setIsStickerMode(false); setGifs([]); }}
-                    className={cn("text-xs font-black uppercase tracking-tighter transition-colors", !isStickerMode ? "text-[var(--crack-orange)]" : "text-zinc-500 hover:text-zinc-300")}
+                    className={cn("text-xs font-black uppercase tracking-tighter transition-colors cursor-pointer", !isStickerMode ? "text-[var(--crack-orange)]" : "text-zinc-500 hover:text-zinc-300")}
                   >
                     GIFs
                   </button>
                   <button 
                     onClick={() => { setIsStickerMode(true); setGifs([]); }}
-                    className={cn("text-xs font-black uppercase tracking-tighter transition-colors", isStickerMode ? "text-[var(--crack-orange)]" : "text-zinc-500 hover:text-zinc-300")}
+                    className={cn("text-xs font-black uppercase tracking-tighter transition-colors cursor-pointer", isStickerMode ? "text-[var(--crack-orange)]" : "text-zinc-500 hover:text-zinc-300")}
                   >
                     Stickers
                   </button>
                 </div>
-                <button onClick={() => setShowGifPicker(false)} className="text-zinc-500 hover:text-white transition-colors">
+                <button onClick={() => setShowGifPicker(false)} className="text-zinc-500 hover:text-white transition-colors cursor-pointer">
                   <X className="w-4 h-4" />
                 </button>
               </div>
               
-              <div className="flex gap-2 mb-4">
+              <div className="flex gap-2.5 mb-4">
                 <div className="relative flex-1">
                   <input 
                     type="text" 
@@ -2151,13 +2380,13 @@ function ChatApp() {
                     onChange={(e) => setGifSearch(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && searchGifs()}
                     placeholder={isStickerMode ? "Search Stickers..." : "Search GIFs..."}
-                    className="w-full bg-zinc-800 border border-zinc-700 p-2 pl-8 text-xs focus:outline-none focus:border-[var(--crack-orange)] transition-colors rounded-sm"
+                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 p-2 pl-8 text-xs focus:outline-none focus:border-[var(--crack-orange)] focus:ring-1 focus:ring-[var(--crack-orange)]/30 transition-all rounded-xl"
                   />
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
                 </div>
                 <button 
                   onClick={() => searchGifs()} 
-                  className="bg-[var(--crack-orange)] px-4 py-2 rounded-sm hover:brightness-110 transition-all active:scale-95"
+                  className="bg-[var(--crack-orange)] px-4 py-2 rounded-xl hover:brightness-110 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
                 >
                   <span className="text-[10px] font-black uppercase text-black">Find</span>
                 </button>
@@ -2176,10 +2405,10 @@ function ChatApp() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       className={cn(
-                        "relative aspect-square rounded-sm overflow-hidden cursor-pointer group transition-all border border-white/5",
+                        "relative aspect-square rounded-xl overflow-hidden cursor-pointer group transition-all border border-white/5",
                         isStickerMode 
-                          ? "bg-[linear-gradient(45deg,#18181b_25%,transparent_25%),linear-gradient(-45deg,#18181b_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#18181b_75%),linear-gradient(-45deg,transparent_75%,#18181b_75%)] bg-[size:10px_10px] bg-[position:0_0,0_5px,5px_-5px,-5px_0] bg-zinc-900 hover:border-[var(--crack-orange)]/40 hover:shadow-[0_0_12px_rgba(255,255,255,0.05)]" 
-                          : "bg-zinc-800 hover:border-[var(--crack-orange)]/30"
+                          ? "bg-[linear-gradient(45deg,#18181b_25%,transparent_25%),linear-gradient(-45deg,#18181b_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#18181b_75%),linear-gradient(-45deg,transparent_75%,#18181b_75%)] bg-[size:10px_10px] bg-[position:0_0,0_5px,5px_-5px,-5px_0] bg-neutral-950/40 hover:border-[var(--crack-orange)]/40 hover:shadow-[0_0_12px_rgba(255,255,255,0.05)]" 
+                          : "bg-white/[0.02] hover:border-[var(--crack-orange)]/30"
                       )}
                       onClick={() => handleSendMessage(undefined, { 
                          type: isStickerMode ? 'sticker' : 'gif', 
@@ -2207,7 +2436,7 @@ function ChatApp() {
                   </div>
                 )}
               </div>
-              <div className="mt-4 pt-2 border-t border-zinc-800 text-center">
+              <div className="mt-4 pt-2 border-t border-white/10 text-center">
                 <span className="text-[8px] text-zinc-600 uppercase font-bold">Powered by Giphy</span>
               </div>
             </motion.div>
@@ -2215,7 +2444,7 @@ function ChatApp() {
         </AnimatePresence>
 
         {/* Input Area */}
-        <div className="p-4 md:p-6 bg-[var(--crack-bg)] border-t border-zinc-900">
+        <div className="p-4 md:p-6 bg-neutral-950/20 backdrop-blur-3xl border-t border-white/10 relative z-10">
           {voiceNoteError && (
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-red-950/40 p-3 mb-3 border-l-2 border-red-500 rounded-sm animate-in slide-in-from-bottom-2 gap-3">
               <div className="flex-1 min-w-0">
@@ -2273,7 +2502,7 @@ function ChatApp() {
           )}
 
           {isRecording ? (
-            <div className="relative flex items-center justify-between bg-black/95 border border-red-500/30 py-3.5 px-4 md:px-6 shadow-[0_0_20px_rgba(239,68,68,0.15)] animate-in fade-in select-none">
+            <div className="relative flex items-center justify-between bg-red-950/15 backdrop-blur-2xl border border-red-500/30 py-3.5 px-4 md:px-6 shadow-[0_0_20px_rgba(239,68,68,0.15)] rounded-2xl animate-in fade-in select-none">
               {/* Left Zone: Recording status, timer, visualizer */}
               <div className="flex items-center space-x-3.5 flex-1 min-w-0">
                 <span className="relative flex h-3 w-3 shrink-0">
@@ -2286,7 +2515,7 @@ function ChatApp() {
                 </span>
 
                 {/* Pulsing visualizer lines */}
-                <div className="hidden sm:flex items-end space-x-0.5 h-4 px-3 border-l border-zinc-700">
+                <div className="hidden sm:flex items-end space-x-0.5 h-4 px-3 border-l border-white/10">
                   {Array.from({ length: 16 }).map((_, i) => (
                     <div 
                       key={i} 
@@ -2309,14 +2538,14 @@ function ChatApp() {
                 <button 
                   type="button" 
                   onClick={() => stopVoiceRecording(false)}
-                  className="px-3.5 py-1.5 md:px-4 text-[10px] font-mono uppercase font-black text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-all rounded cursor-pointer"
+                  className="px-3.5 py-1.5 md:px-4 text-[10px] font-mono uppercase font-black text-zinc-400 hover:text-white border border-white/10 hover:border-white/20 transition-all rounded-xl cursor-pointer"
                 >
                   Discard
                 </button>
                 <button 
                   type="button" 
                   onClick={() => stopVoiceRecording(true)}
-                  className="px-4 py-1.5 md:px-5 text-[10px] font-mono uppercase font-black bg-red-600 hover:bg-red-500 text-white border border-red-500/30 hover:border-red-400/50 shadow-md shadow-red-900/30 transition-all rounded cursor-pointer"
+                  className="px-4 py-1.5 md:px-5 text-[10px] font-mono uppercase font-black bg-red-600 hover:bg-red-500 text-white border border-red-500/30 hover:border-red-400/50 shadow-md shadow-red-900/30 transition-all rounded-xl cursor-pointer"
                 >
                   Stop & Send
                 </button>
@@ -2325,20 +2554,20 @@ function ChatApp() {
           ) : (
             <form 
               onSubmit={handleSendMessage}
-              className="relative flex items-center bg-black/60 backdrop-blur-2xl border border-white/5 focus-within:border-white transition-all duration-500 shadow-2xl"
+              className="relative flex items-center bg-white/[0.03] backdrop-blur-2xl border border-white/10 focus-within:border-[var(--crack-orange)] focus-within:ring-1 focus-within:ring-[var(--crack-orange)]/30 rounded-2xl transition-all duration-500 shadow-2xl overflow-hidden"
             >
-              <div className="flex items-center px-2 md:px-4 space-x-1 md:space-x-2 border-r border-white/5">
+              <div className="flex items-center px-2 md:px-4 space-x-1 md:space-x-2 border-r border-white/10">
                 <button 
                   type="button"
                   onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowGifPicker(false); }}
-                  className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", showEmojiPicker && "text-[var(--crack-orange)]")}
+                  className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)] transition-colors cursor-pointer", showEmojiPicker && "text-[var(--crack-orange)]")}
                 >
                   <Smile className="w-5 h-5" />
                 </button>
                 <button 
                   type="button"
                   onClick={() => { setShowGifPicker(!showGifPicker); setShowEmojiPicker(false); }}
-                  className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", showGifPicker && "text-[var(--crack-orange)]")}
+                  className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)] transition-colors cursor-pointer", showGifPicker && "text-[var(--crack-orange)]")}
                 >
                   <ImageIcon className="w-5 h-5" />
                 </button>
@@ -2346,14 +2575,14 @@ function ChatApp() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading}
-                  className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)]", isUploading && "animate-pulse")}
+                  className={cn("p-2 text-zinc-500 hover:text-[var(--crack-orange)] transition-colors cursor-pointer", isUploading && "animate-pulse")}
                 >
                   {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
                 </button>
                 <button 
                   type="button"
                   onClick={startVoiceRecording}
-                  className="p-2 text-zinc-500 hover:text-[var(--crack-orange)] transition-colors"
+                  className="p-2 text-zinc-500 hover:text-[var(--crack-orange)] transition-colors cursor-pointer"
                   title="Record Voice Note"
                 >
                   <Mic className="w-5 h-5" />
@@ -2384,7 +2613,7 @@ function ChatApp() {
               <button
                 type="submit"
                 className={cn(
-                  "px-4 md:px-6 transition-all active:scale-90",
+                  "px-4 md:px-6 transition-all active:scale-90 cursor-pointer",
                   inputText.trim() ? "text-[var(--crack-orange)]" : "text-zinc-700 opacity-30"
                 )}
               >
@@ -2603,9 +2832,9 @@ function ChatApp() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4"
+              className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4"
             >
-              <div className="bg-[var(--crack-surface)] border border-white/5 p-4 sm:p-6 md:p-8 max-w-xl w-full space-y-4 sm:space-y-6 rounded-md shadow-2xl relative overflow-hidden">
+              <div className="bg-neutral-950/25 backdrop-blur-3xl border border-white/10 p-4 sm:p-6 md:p-8 max-w-xl w-full space-y-4 sm:space-y-6 rounded-2xl shadow-2xl relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-tr from-[var(--crack-orange)]/5 via-transparent to-transparent pointer-events-none" />
                 
                 <div className="flex items-center justify-between relative z-10">
@@ -2618,7 +2847,7 @@ function ChatApp() {
                   </div>
                   <button 
                     onClick={() => setShowThemePicker(false)}
-                    className="p-1.5 hover:bg-white/5 text-zinc-500 hover:text-white transition-all rounded"
+                    className="p-1.5 hover:bg-white/5 text-zinc-500 hover:text-white transition-all rounded-lg cursor-pointer"
                   >
                     <X className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
@@ -2630,11 +2859,11 @@ function ChatApp() {
                       key={t.name}
                       onClick={() => { setCurrentTheme(t); setShowThemePicker(false); }}
                       className={cn(
-                        "p-3 border flex flex-col items-start space-y-2 transition-all relative overflow-hidden text-left group bg-black/40 hover:bg-black/20 hover:scale-[1.01] cursor-pointer",
-                        currentTheme.name === t.name ? "bg-white/5 border-white" : "border-white/5 opacity-70 hover:opacity-100"
+                        "p-3 border flex flex-col items-start space-y-2 transition-all relative overflow-hidden text-left group bg-white/[0.02] hover:bg-white/[0.06] hover:scale-[1.01] cursor-pointer rounded-xl",
+                        currentTheme.name === t.name ? "bg-white/[0.08] border-white" : "border-white/10 opacity-70 hover:opacity-100"
                       )}
                       style={{ 
-                        borderColor: currentTheme.name === t.name ? t.color : 'rgba(255,255,255,0.05)',
+                        borderColor: currentTheme.name === t.name ? t.color : 'rgba(255,255,255,0.08)',
                         boxShadow: currentTheme.name === t.name ? `0 0 15px ${t.color}22` : 'none'
                       }}
                     >
@@ -2652,7 +2881,7 @@ function ChatApp() {
                       <div className="min-w-0 relative z-10 w-full">
                         <span className="text-[11px] sm:text-xs font-black uppercase tracking-tighter text-white block truncate">{t.name}</span>
                       </div>
- 
+                      
                       {/* Visual swatch indicator strip */}
                       <div className="flex space-x-1 w-full pt-1 relative z-10">
                         <div className="w-full h-1 bg-[#050505] rounded-l border border-white/5" title="Background Base" />
