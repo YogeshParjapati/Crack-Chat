@@ -84,9 +84,15 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if true;
         allow create: if true;
-        allow update: if isAuthenticated() && (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) ||
-          isAdmin()
+        allow update: if (
+          // Allow toggling reactions or pinned status by anyone
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'pinned']) ||
+          // Allow message owners to edit their own message text, reactions, or pinned state
+          (request.resource.data.uid == resource.data.uid && request.resource.data.diff(resource.data).affectedKeys().hasAll(['text']) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'reactions', 'pinned'])) ||
+          // Allow admin to do anything
+          isAdmin() ||
+          // Fallback check
+          (isAuthenticated() && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) || isAdmin()))
         );
         allow delete: if true;
       }

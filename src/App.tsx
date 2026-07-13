@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2, Terminal, Cpu, Layers, Wifi, Mic, MicOff, VideoOff, Maximize2, ZoomIn, Play, Pause } from 'lucide-react';
+import { Send, User, Hash, Shield, Users, Zap, Plus, Lock, Unlock, Smile, Image as ImageIcon, Phone, Video, Palette, X, Search, AlertTriangle, Paperclip, Loader2, Trash2, Terminal, Cpu, Layers, Wifi, Mic, MicOff, VideoOff, Maximize2, ZoomIn, Play, Pause, Pin, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 
 import { cn } from '@/src/lib/utils';
@@ -502,6 +502,66 @@ function ChatApp() {
   const [videoMuted, setVideoMuted] = useState(false);
   const [callError, setCallError] = useState('');
   const [volumeLevel, setVolumeLevel] = useState(0);
+
+  // New features states
+  const [isSearchingChat, setIsSearchingChat] = useState(false);
+  const [msgSearchQuery, setMsgSearchQuery] = useState('');
+  const [isEditingRoomName, setIsEditingRoomName] = useState(false);
+  const [editedRoomName, setEditedRoomName] = useState('');
+  const [pinnedRoomIds, setPinnedRoomIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('crackchat_pinned_rooms');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('crackchat_pinned_rooms', JSON.stringify(pinnedRoomIds));
+  }, [pinnedRoomIds]);
+
+  const togglePinRoom = (roomId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setPinnedRoomIds(prev => 
+      prev.includes(roomId) ? prev.filter(id => id !== roomId) : [...prev, roomId]
+    );
+  };
+
+  const handleRenameRoom = async (roomId: string, newName: string) => {
+    if (!newName.trim()) return;
+    try {
+      const roomRef = doc(db, 'rooms', roomId);
+      await setDoc(roomRef, { name: newName.trim() }, { merge: true });
+      if (currentRoom?.id === roomId) {
+        setCurrentRoom(prev => prev ? { ...prev, name: newName.trim() } : null);
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomId}`);
+    }
+  };
+
+  // Message edit & pin states and handlers
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editingMsgText, setEditingMsgText] = useState('');
+  const [showPinnedMsgsOnly, setShowPinnedMsgsOnly] = useState(false);
+
+  const handleEditMessage = async (messageId: string, newText: string) => {
+    if (!newText.trim() || !currentRoom) return;
+    try {
+      const messageRef = doc(db, `rooms/${currentRoom.id}/messages`, messageId);
+      await setDoc(messageRef, { text: newText.trim() }, { merge: true });
+      setEditingMsgId(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `rooms/${currentRoom.id}/messages/${messageId}`);
+    }
+  };
+
+  const handleTogglePinMessage = async (messageId: string, isCurrentlyPinned: boolean) => {
+    if (!currentRoom) return;
+    try {
+      const messageRef = doc(db, `rooms/${currentRoom.id}/messages`, messageId);
+      await setDoc(messageRef, { pinned: !isCurrentlyPinned }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `rooms/${currentRoom.id}/messages/${messageId}`);
+    }
+  };
 
   // Voice recording states & refs
   const [isRecording, setIsRecording] = useState(false);
@@ -1189,6 +1249,9 @@ function ChatApp() {
   useEffect(() => {
     if (!currentRoom) return;
 
+    setShowPinnedMsgsOnly(false);
+    setEditingMsgId(null);
+
     const q = query(
       collection(db, `rooms/${currentRoom.id}/messages`), 
       orderBy('timestamp', 'asc'),
@@ -1781,10 +1844,10 @@ function ChatApp() {
         {currentTheme.bgImage && (
           <div 
             className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 z-0"
-            style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.15 }}
+            style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.45 }}
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/80 pointer-events-none z-0" />
+        <div className={cn("absolute inset-0 pointer-events-none z-0 transition-all duration-1000", currentTheme.bgImage ? "bg-black/45" : "bg-gradient-to-b from-black/80 via-transparent to-black/80")} />
         
         <motion.div 
           initial={{ opacity: 0, y: 30 }}
@@ -1919,39 +1982,68 @@ function ChatApp() {
                 </form>
               ) : (
                 <div className="flex-1 overflow-y-auto max-h-[190px] md:max-h-[250px] space-y-2.5 pr-1 scrollbar-hide">
-                  {rooms.filter(r => r.name.toLowerCase().includes(roomSearch.toLowerCase())).map((room, idx) => (
-                    <motion.div 
-                      key={room.id}
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.4, delay: idx * 0.05 }}
-                      onClick={() => !room.hasPassword && handleJoinRoom(room, '')}
-                      className="group flex items-center justify-between bg-white/[0.02] p-3 md:p-4 border border-white/5 hover:border-white/15 hover:bg-white/[0.06] rounded-xl transition-all duration-300 cursor-pointer relative overflow-hidden active:scale-[0.99]"
-                    >
-                      <div className="flex items-center space-x-2.5 md:space-x-3 relative z-10 min-w-0 flex-1 mr-2">
-                        <Hash className="w-4 h-4 md:w-5 md:h-5 text-zinc-500 group-hover:text-white transition-colors flex-shrink-0" />
-                        <span className="text-sm md:text-base font-black uppercase tracking-tighter truncate">{room.name}</span>
-                        {room.hasPassword && <Lock className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />}
-                      </div>
-                      <div className="flex items-center space-x-2 relative z-10 flex-shrink-0">
-                        {room.hasPassword && (
-                          <input 
-                            type="password" 
-                            placeholder="PASS" 
-                            className="w-14 sm:w-20 bg-white/[0.03] backdrop-blur-md border border-white/10 text-[9px] md:text-[10px] p-1.5 focus:outline-none focus:border-[var(--crack-orange)] rounded-lg transition-all"
-                            onChange={(e) => setJoinPass(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        )}
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleJoinRoom(room, joinPass); }}
-                          className="text-[10px] md:text-xs font-black uppercase text-white md:opacity-0 md:group-hover:opacity-100 transition-all hover:scale-110 px-2.5 py-1 bg-white/5 md:bg-white/10 hover:bg-[var(--crack-orange)] hover:text-black rounded-lg cursor-pointer font-bold"
-                        >
-                          Join
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
+                  {(() => {
+                    const sortedLobbyRooms = [...rooms]
+                      .filter(r => r.name.toLowerCase().includes(roomSearch.toLowerCase()))
+                      .sort((a, b) => {
+                        const aPinned = pinnedRoomIds.includes(a.id);
+                        const bPinned = pinnedRoomIds.includes(b.id);
+                        if (aPinned && !bPinned) return -1;
+                        if (!aPinned && bPinned) return 1;
+                        return (b.createdAt || 0) - (a.createdAt || 0);
+                      });
+                    return sortedLobbyRooms.map((room, idx) => (
+                      <motion.div 
+                        key={room.id}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: idx * 0.05 }}
+                        onClick={() => !room.hasPassword && handleJoinRoom(room, '')}
+                        className="group flex items-center justify-between bg-white/[0.02] p-3 md:p-4 border border-white/5 hover:border-white/15 hover:bg-white/[0.06] rounded-xl transition-all duration-300 cursor-pointer relative overflow-hidden active:scale-[0.99]"
+                      >
+                        <div className="flex items-center space-x-2.5 md:space-x-3 relative z-10 min-w-0 flex-1 mr-2">
+                          <Hash className="w-4 h-4 md:w-5 md:h-5 text-zinc-500 group-hover:text-white transition-colors flex-shrink-0" />
+                          <span className="text-sm md:text-base font-black uppercase tracking-tighter truncate">{room.name}</span>
+                          {room.hasPassword && <Lock className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />}
+                          {pinnedRoomIds.includes(room.id) && (
+                            <span className="text-[8px] bg-[var(--crack-orange)]/15 border border-[var(--crack-orange)]/30 text-[var(--crack-orange)] px-1.5 py-0.5 rounded uppercase font-black font-mono tracking-widest flex items-center gap-1">
+                              <Pin className="w-2 h-2" /> PINNED
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2 relative z-10 flex-shrink-0">
+                          {/* Pin button inside lobby list */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); togglePinRoom(room.id); }}
+                            className={cn(
+                              "p-1.5 rounded-lg hover:bg-white/10 transition-all cursor-pointer",
+                              pinnedRoomIds.includes(room.id) 
+                                ? "text-[var(--crack-orange)] scale-110" 
+                                : "opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-white"
+                            )}
+                            title={pinnedRoomIds.includes(room.id) ? "Unpin Chat" : "Pin Chat"}
+                          >
+                            <Pin className="w-3.5 h-3.5" />
+                          </button>
+                          {room.hasPassword && (
+                            <input 
+                              type="password" 
+                              placeholder="PASS" 
+                              className="w-14 sm:w-20 bg-white/[0.03] backdrop-blur-md border border-white/10 text-[9px] md:text-[10px] p-1.5 focus:outline-none focus:border-[var(--crack-orange)] rounded-lg transition-all"
+                              onChange={(e) => setJoinPass(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          )}
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleJoinRoom(room, joinPass); }}
+                            className="text-[10px] md:text-xs font-black uppercase text-white md:opacity-0 md:group-hover:opacity-100 transition-all hover:scale-110 px-2.5 py-1 bg-white/5 md:bg-white/10 hover:bg-[var(--crack-orange)] hover:text-black rounded-lg cursor-pointer font-bold"
+                          >
+                            Join
+                          </button>
+                        </div>
+                      </motion.div>
+                    ));
+                  })()}
                 </div>
               )}
             </motion.div>
@@ -2016,10 +2108,10 @@ function ChatApp() {
       {currentTheme.bgImage && (
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
-          style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.1 }}
+          style={{ backgroundImage: `url(${currentTheme.bgImage})`, opacity: 0.45 }}
         />
       )}
-      <div className="absolute inset-0 bg-black/60 pointer-events-none" />
+      <div className={cn("absolute inset-0 pointer-events-none transition-all duration-1000", currentTheme.bgImage ? "bg-black/45" : "bg-black/70")} />
 
       {/* Sidebar - Desktop */}
       <div className="hidden md:flex w-64 border-r border-white/10 flex-col p-6 space-y-8 bg-neutral-950/20 backdrop-blur-3xl relative z-10">
@@ -2035,6 +2127,8 @@ function ChatApp() {
           roomSearch={roomSearch}
           setRoomSearch={setRoomSearch}
           setShowAdminPanel={setShowAdminPanel}
+          pinnedRoomIds={pinnedRoomIds}
+          togglePinRoom={togglePinRoom}
         />
       </div>
 
@@ -2069,6 +2163,8 @@ function ChatApp() {
                 setRoomSearch={setRoomSearch}
                 onClose={() => setShowMobileSidebar(false)}
                 setShowAdminPanel={setShowAdminPanel}
+                pinnedRoomIds={pinnedRoomIds}
+                togglePinRoom={togglePinRoom}
               />
             </motion.div>
           </>
@@ -2087,9 +2183,51 @@ function ChatApp() {
               <Zap className="w-6 h-6" />
             </button>
             <div className="flex items-center space-x-2">
-              <Hash className="w-5 h-5 text-zinc-500" />
-              <div className="flex flex-col">
-                <h3 className="font-black uppercase tracking-tighter truncate max-w-[120px] md:max-w-none leading-none">{currentRoom?.name}</h3>
+              <Hash className="w-5 h-5 text-zinc-500 flex-shrink-0" />
+              <div className="flex flex-col min-w-0">
+                {isEditingRoomName ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (editedRoomName.trim() && currentRoom) {
+                        handleRenameRoom(currentRoom.id, editedRoomName.trim());
+                        setIsEditingRoomName(false);
+                      }
+                    }}
+                    className="flex items-center space-x-2"
+                  >
+                    <input
+                      type="text"
+                      value={editedRoomName}
+                      onChange={(e) => setEditedRoomName(e.target.value)}
+                      className="bg-black/50 border border-white/20 p-1 px-2 text-xs font-bold uppercase focus:outline-none focus:border-[var(--crack-orange)] text-white font-mono rounded w-32 sm:w-48"
+                      autoFocus
+                      onBlur={() => {
+                        if (editedRoomName.trim() && currentRoom && editedRoomName !== currentRoom.name) {
+                          handleRenameRoom(currentRoom.id, editedRoomName.trim());
+                        }
+                        setIsEditingRoomName(false);
+                      }}
+                    />
+                    <button type="submit" className="text-[9px] uppercase font-black tracking-widest text-[var(--crack-orange)] hover:brightness-110">Save</button>
+                  </form>
+                ) : (
+                  <div className="flex items-center space-x-1.5 group/title min-w-0">
+                    <h3 className="font-black uppercase tracking-tighter truncate max-w-[120px] md:max-w-[240px] leading-none">{currentRoom?.name}</h3>
+                    <button
+                      onClick={() => {
+                        if (currentRoom) {
+                          setEditedRoomName(currentRoom.name);
+                          setIsEditingRoomName(true);
+                        }
+                      }}
+                      className="opacity-0 group-hover/title:opacity-100 focus:opacity-100 transition-opacity text-zinc-500 hover:text-white p-0.5 cursor-pointer"
+                      title="Rename Chat"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-center space-x-1 mt-0.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
                   <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{onlineCount} ONLINE</span>
@@ -2100,14 +2238,24 @@ function ChatApp() {
           
           <div className="flex items-center space-x-2 md:space-x-4">
             <button 
+              onClick={() => setIsSearchingChat(!isSearchingChat)}
+              className={cn(
+                "transition-all hover:scale-110 active:scale-95 cursor-pointer",
+                isSearchingChat ? "text-[var(--crack-orange)]" : "text-zinc-500 hover:text-white"
+              )}
+              title="Search in Chat"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+            <button 
               onClick={() => handleStartCall('voice')}
-              className="text-zinc-500 hover:text-white transition-all hover:scale-110 active:scale-95"
+              className="text-zinc-500 hover:text-white transition-all hover:scale-110 active:scale-95 cursor-pointer"
             >
               <Phone className="w-5 h-5" />
             </button>
             <button 
               onClick={() => handleStartCall('video')}
-              className="text-zinc-500 hover:text-white transition-all hover:scale-110 active:scale-95"
+              className="text-zinc-500 hover:text-white transition-all hover:scale-110 active:scale-95 cursor-pointer"
             >
               <Video className="w-5 h-5" />
             </button>
@@ -2133,14 +2281,109 @@ function ChatApp() {
           </div>
         </header>
 
+        {/* Chat Search Bar */}
+        <AnimatePresence>
+          {isSearchingChat && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="border-b border-white/10 bg-black/45 backdrop-blur-md overflow-hidden relative z-10 flex-shrink-0"
+            >
+              <div className="p-3 px-4 md:px-6 flex items-center gap-3">
+                <Search className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                <input 
+                  type="text"
+                  placeholder="Search messages in this chat..."
+                  value={msgSearchQuery}
+                  onChange={(e) => setMsgSearchQuery(e.target.value)}
+                  className="w-full bg-transparent text-xs md:text-sm focus:outline-none placeholder-zinc-500 font-mono uppercase text-white"
+                  autoFocus
+                />
+                {msgSearchQuery && (
+                  <button 
+                    onClick={() => setMsgSearchQuery('')}
+                    className="text-[9px] uppercase font-black tracking-widest text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button 
+                  onClick={() => {
+                    setIsSearchingChat(false);
+                    setMsgSearchQuery('');
+                  }}
+                  className="text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Pinned Messages Header Alert */}
+        {messages.some(m => m.pinned) && (
+          <div className="border-b border-[var(--crack-orange)]/20 bg-[var(--crack-orange)]/[0.03] backdrop-blur-md relative z-10 flex-shrink-0">
+            <div className="p-2.5 px-4 md:px-6 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-[var(--crack-orange)] font-bold tracking-wider uppercase font-mono min-w-0">
+                <Pin className="w-3.5 h-3.5 animate-bounce flex-shrink-0" />
+                <span className="flex-shrink-0">PINNED:</span>
+                <span className="text-white text-[10px] md:text-xs font-sans font-medium tracking-tight truncate max-w-[120px] sm:max-w-md md:max-w-xl italic">
+                  "{messages.filter(m => m.pinned)[messages.filter(m => m.pinned).length - 1].text || (messages.filter(m => m.pinned)[messages.filter(m => m.pinned).length - 1].type.toUpperCase() + ' FILE')}"
+                </span>
+                {messages.filter(m => m.pinned).length > 1 && (
+                  <span className="text-[8px] md:text-[9px] bg-[var(--crack-orange)]/20 text-[var(--crack-orange)] px-1.5 py-0.5 rounded font-black font-mono flex-shrink-0">
+                    +{messages.filter(m => m.pinned).length - 1} MORE
+                  </span>
+                )}
+              </div>
+              <button 
+                onClick={() => setShowPinnedMsgsOnly(!showPinnedMsgsOnly)}
+                className={cn(
+                  "text-[9px] md:text-[10px] uppercase font-black tracking-widest px-2 py-1 rounded border transition-all cursor-pointer font-mono flex-shrink-0",
+                  showPinnedMsgsOnly 
+                    ? "bg-[var(--crack-orange)] text-black border-[var(--crack-orange)] shadow-[0_0_12px_rgba(249,115,22,0.3)]" 
+                    : "text-zinc-400 hover:text-white border-white/10 hover:border-white/20"
+                )}
+              >
+                {showPinnedMsgsOnly ? "Show All" : "Filter Pinned"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 scrollbar-hide">
           <AnimatePresence initial={false}>
-            {messages.map((msg) => (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
+            {(() => {
+              const filteredMessages = messages.filter(msg => {
+                if (showPinnedMsgsOnly && !msg.pinned) return false;
+                if (!msgSearchQuery) return true;
+                const textToSearch = msg.text || '';
+                const senderToSearch = msg.sender || '';
+                const typeToSearch = msg.type || '';
+                const query = msgSearchQuery.toLowerCase();
+                return textToSearch.toLowerCase().includes(query) || 
+                       senderToSearch.toLowerCase().includes(query) || 
+                       typeToSearch.toLowerCase().includes(query);
+              });
+
+              if (filteredMessages.length === 0 && msgSearchQuery) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-20 text-zinc-500 space-y-2 animate-in fade-in duration-300">
+                    <Search className="w-8 h-8 opacity-20" />
+                    <p className="text-xs uppercase font-mono tracking-widest font-bold">No matching messages found</p>
+                    <p className="text-[10px] text-zinc-600 uppercase font-mono">Query: "{msgSearchQuery}"</p>
+                  </div>
+                );
+              }
+
+              return filteredMessages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
                 drag="x"
                 dragConstraints={{ left: 0, right: 60 }}
                 dragElastic={{ left: 0, right: 0.15 }}
@@ -2175,6 +2418,25 @@ function ChatApp() {
                     >
                       <Smile className="w-3.5 h-3.5" />
                     </button>
+                    <button 
+                      onClick={() => handleTogglePinMessage(msg.id, !!msg.pinned)}
+                      className={cn(
+                        "hover:scale-110 active:scale-95 transition-all cursor-pointer p-0.5 rounded",
+                        msg.pinned ? "text-[var(--crack-orange)]" : "text-zinc-600 hover:text-white"
+                      )}
+                      title={msg.pinned ? "Unpin Message" : "Pin Message"}
+                    >
+                      <Pin className="w-3.5 h-3.5" />
+                    </button>
+                    {(isAdmin || msg.uid === userId) && msg.type === 'text' && (
+                      <button 
+                        onClick={() => { setEditingMsgId(msg.id); setEditingMsgText(msg.text || ''); }}
+                        className="text-zinc-600 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer p-0.5 rounded"
+                        title="Edit Message"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {(isAdmin || msg.uid === userId) && (
                       <button 
                         onClick={() => handleDeleteMessage(msg.id)}
@@ -2220,8 +2482,60 @@ function ChatApp() {
                 
                 <div className="max-w-[90%] md:max-w-2xl">
                   {msg.type === 'text' && (
-                    <div className="text-zinc-200 text-sm leading-relaxed bg-white/[0.03] backdrop-blur-md p-4 rounded-2xl border border-white/10 border-l-[3px] border-l-[var(--crack-orange)] hover:bg-white/[0.07] hover:border-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.02)] hover:translate-x-1 transition-all duration-300 break-words whitespace-pre-wrap">
-                      {msg.text}
+                    editingMsgId === msg.id ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleEditMessage(msg.id, editingMsgText);
+                        }}
+                        className="w-full max-w-xl flex flex-col space-y-2 bg-neutral-900/90 border border-[var(--crack-orange)]/45 p-3 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+                      >
+                        <textarea
+                          value={editingMsgText}
+                          onChange={(e) => setEditingMsgText(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 p-2.5 text-xs md:text-sm font-sans focus:outline-none focus:border-[var(--crack-orange)] text-white rounded-lg resize-none min-h-[60px]"
+                          placeholder="Edit your message..."
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleEditMessage(msg.id, editingMsgText);
+                            }
+                          }}
+                        />
+                        <div className="flex items-center justify-end space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingMsgId(null)}
+                            className="px-2.5 py-1 text-[10px] uppercase font-black tracking-widest text-zinc-400 hover:text-white hover:bg-white/5 rounded transition-all cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-3 py-1 text-[10px] uppercase font-black tracking-widest bg-[var(--crack-orange)] text-black hover:brightness-110 rounded transition-all cursor-pointer"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className={cn(
+                        "text-zinc-200 text-sm leading-relaxed bg-white/[0.03] backdrop-blur-md p-4 rounded-2xl border border-white/10 border-l-[3px] border-l-[var(--crack-orange)] hover:bg-white/[0.07] hover:border-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.02)] hover:translate-x-1 transition-all duration-300 break-words whitespace-pre-wrap relative pr-16",
+                        msg.pinned && "bg-[var(--crack-orange)]/5 border-l-[var(--crack-orange)] border border-[var(--crack-orange)]/20 shadow-[0_0_15px_rgba(249,115,22,0.03)]"
+                      )}>
+                        {msg.text}
+                        {msg.pinned && (
+                          <span className="absolute right-3 top-2 flex items-center space-x-1 text-[8px] bg-[var(--crack-orange)]/15 text-[var(--crack-orange)] border border-[var(--crack-orange)]/35 px-1.5 py-0.5 rounded uppercase font-black font-mono tracking-widest select-none">
+                            <Pin className="w-2.5 h-2.5" /> PINNED
+                          </span>
+                        )}
+                      </div>
+                    )
+                  )}
+                  {msg.type !== 'text' && msg.pinned && (
+                    <div className="flex items-center space-x-1 text-[8px] bg-[var(--crack-orange)]/15 text-[var(--crack-orange)] border border-[var(--crack-orange)]/35 px-1.5 py-0.5 rounded uppercase font-black font-mono tracking-widest select-none w-fit mt-1.5 mb-1">
+                      <Pin className="w-2.5 h-2.5" /> PINNED
                     </div>
                   )}
                   {msg.type === 'sticker' && (
@@ -2322,7 +2636,8 @@ function ChatApp() {
                   )}
                 </div>
               </motion.div>
-            ))}
+            ));
+          })()}
           </AnimatePresence>
           <div ref={messagesEndRef} />
         </div>
@@ -3243,7 +3558,9 @@ function SidebarContent({
   roomSearch,
   setRoomSearch,
   onClose,
-  setShowAdminPanel
+  setShowAdminPanel,
+  pinnedRoomIds = [],
+  togglePinRoom = () => {}
 }: { 
   rooms: Room[], 
   currentRoom: Room | null, 
@@ -3256,7 +3573,9 @@ function SidebarContent({
   roomSearch: string,
   setRoomSearch: (val: string) => void,
   onClose?: () => void,
-  setShowAdminPanel?: (val: boolean) => void
+  setShowAdminPanel?: (val: boolean) => void,
+  pinnedRoomIds?: string[],
+  togglePinRoom?: (roomId: string, e?: React.MouseEvent) => void
 }) {
   return (
     <>
@@ -3268,10 +3587,10 @@ function SidebarContent({
           CRACK<span className="text-[var(--crack-orange)]">CHAT</span>
         </h2>
         <div className="flex items-center space-x-2">
-          <button onClick={() => setShowThemePicker(!showThemePicker)} className="text-zinc-500 hover:text-white transition-colors">
+          <button onClick={() => setShowThemePicker(!showThemePicker)} className="text-zinc-500 hover:text-white transition-colors cursor-pointer">
             <Palette className="w-4 h-4" />
           </button>
-          <button onClick={() => setIsJoined(false)} className="text-zinc-500 hover:text-red-500 transition-colors">
+          <button onClick={() => setIsJoined(false)} className="text-zinc-500 hover:text-red-500 transition-colors cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -3280,7 +3599,7 @@ function SidebarContent({
       <div className="space-y-4 flex-1 overflow-y-auto scrollbar-hide">
         <div className="flex items-center justify-between">
           <div className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Active Rooms</div>
-          <button onClick={() => setIsJoined(false)} className="text-[10px] text-zinc-500 hover:text-white uppercase font-black transition-colors">Switch</button>
+          <button onClick={() => setIsJoined(false)} className="text-[10px] text-zinc-500 hover:text-white uppercase font-black transition-colors cursor-pointer">Switch</button>
         </div>
 
         <div className="relative">
@@ -3295,21 +3614,51 @@ function SidebarContent({
         </div>
 
         <div className="space-y-1">
-          {rooms.filter(r => r.name.toLowerCase().includes(roomSearch.toLowerCase())).map(room => (
-            <button
-              key={room.id}
-              onClick={() => { handleJoinRoom(room); onClose?.(); }}
-              className={cn(
-                "w-full flex items-center space-x-2 p-2 -mx-2 transition-all group relative overflow-hidden",
-                currentRoom?.id === room.id ? "text-white bg-white/10" : "text-zinc-500 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <Hash className="w-4 h-4" />
-              <span className="font-black uppercase tracking-tighter truncate">{room.name}</span>
-              {room.hasPassword && <Lock className="w-3 h-3 ml-auto opacity-50" />}
-              {currentRoom?.id === room.id && <div className="absolute left-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_white]" />}
-            </button>
-          ))}
+          {(() => {
+            const sortedRooms = [...rooms]
+              .filter(r => r.name.toLowerCase().includes(roomSearch.toLowerCase()))
+              .sort((a, b) => {
+                const aPinned = pinnedRoomIds.includes(a.id);
+                const bPinned = pinnedRoomIds.includes(b.id);
+                if (aPinned && !bPinned) return -1;
+                if (!aPinned && bPinned) return 1;
+                return (b.createdAt || 0) - (a.createdAt || 0);
+              });
+
+            return sortedRooms.map(room => (
+              <div
+                key={room.id}
+                className={cn(
+                  "w-full flex items-center justify-between p-2 -mx-2 transition-all group relative overflow-hidden",
+                  currentRoom?.id === room.id ? "text-white bg-white/10" : "text-zinc-500 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <button
+                  onClick={() => { handleJoinRoom(room); onClose?.(); }}
+                  className="flex-1 flex items-center space-x-2 min-w-0 text-left cursor-pointer"
+                >
+                  <Hash className="w-4 h-4 flex-shrink-0" />
+                  <span className="font-black uppercase tracking-tighter truncate">{room.name}</span>
+                </button>
+                <div className="flex items-center space-x-1.5 ml-2 flex-shrink-0 relative z-10">
+                  {room.hasPassword && <Lock className="w-3 h-3 text-zinc-500 opacity-50 flex-shrink-0" />}
+                  <button
+                    onClick={(e) => togglePinRoom(room.id, e)}
+                    className={cn(
+                      "p-1 rounded hover:bg-white/10 transition-all cursor-pointer",
+                      pinnedRoomIds.includes(room.id) 
+                        ? "text-[var(--crack-orange)] scale-110" 
+                        : "opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-white"
+                    )}
+                    title={pinnedRoomIds.includes(room.id) ? "Unpin Chat" : "Pin Chat"}
+                  >
+                    <Pin className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {currentRoom?.id === room.id && <div className="absolute left-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_white]" />}
+              </div>
+            ));
+          })()}
         </div>
       </div>
 
